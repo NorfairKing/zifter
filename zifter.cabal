@@ -14,11 +14,15 @@ library
     exposed-modules:
         Zifter
         Zifter.Types
+        Zifter.OptParse
+        Zifter.OptParse.Types
     build-depends:
         base >=4.9 && <=5,
         introduction,
         process >= 1.4 && < 1.5,
-        filepath >= 1.4 && < 1.5
+        filepath >= 1.4 && < 1.5,
+        directory >= 1.2 && < 1.3,
+        optparse-applicative >= 0.12 && < 0.13
     default-language: Haskell2010
     default-extensions: NoImplicitPrelude
     hs-source-dirs: src/
