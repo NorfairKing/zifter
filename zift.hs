@@ -1,5 +1,6 @@
 #!/usr/bin/env stack
-{- stack --install-ghc
+{- stack
+    --install-ghc
     runghc
     --package zifter
 -}
