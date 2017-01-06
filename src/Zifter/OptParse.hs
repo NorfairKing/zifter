@@ -54,14 +54,14 @@ parseArgs :: Parser Arguments
 parseArgs = (,) <$> parseCommand <*> parseFlags
 
 parseCommand :: Parser Command
-parseCommand = hsubparser $ mconcat [command "run" parseCommandRun, command "install" parseCommandInstall]
+parseCommand =
+    hsubparser $ mconcat [command "run" parseCommandRun, command "install" parseCommandInstall]
 
 parseCommandRun :: ParserInfo Command
 parseCommandRun = info parser modifier
   where
     parser = pure CommandRun
-    modifier =
-        fullDesc <> progDesc "Run the zift script."
+    modifier = fullDesc <> progDesc "Run the zift script."
 
 parseCommandInstall :: ParserInfo Command
 parseCommandInstall = info parser modifier

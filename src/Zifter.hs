@@ -1,17 +1,20 @@
 {-# LANGUAGE TemplateHaskell #-}
+
 module Zifter where
 
 import Introduction
 
 import Data.List (isInfixOf)
 
+import qualified System.Directory as D
+       (canonicalizePath, setPermissions, getPermissions,
+        setOwnerExecutable)
 import System.Environment (getProgName)
-import qualified System.FilePath as FP (splitPath,joinPath)
-import qualified System.Directory as D (canonicalizePath, setPermissions, getPermissions, setOwnerExecutable)
+import qualified System.FilePath as FP (splitPath, joinPath)
 import System.Process (shell, createProcess, waitForProcess)
 
-import Zifter.Types
 import Zifter.OptParse
+import Zifter.Types
 
 zift :: IO ()
 zift = do
@@ -53,7 +56,14 @@ hindent rootdir = do
             phs <-
                 forM sources $ \fp -> do
                     let cmd =
-                            unwords ["hindent", "--indent-size", "4", "--line-length", "100", toFilePath fp]
+                            unwords
+                                [ "hindent"
+                                , "--indent-size"
+                                , "4"
+                                , "--line-length"
+                                , "100"
+                                , toFilePath fp
+                                ]
                     let cp = shell cmd
                     (_, _, _, ph) <- createProcess cp
                     pure (cmd, ph)
@@ -76,28 +86,28 @@ install = do
     print gd
     print gitfile
     print gf
-    ghd <- case (gd, gf) of
-        (True, False) -> pure $ gitdir </> hooksDir
-        (False, True) -> do
-            contents <- readFile gitfile
-            case splitAt (length "gitdir: ") contents of
-                ("gitdir: ", rest) -> do
-                    case initMay rest of
-                        Just gitdirref -> do
-                            sp <- D.canonicalizePath $ toFilePath rootdir ++ gitdirref
-                            let figureOutDoubleDots = FP.joinPath . go [] . FP.splitPath
-                                  where
-                                    go acc [] = reverse acc
-                                    go (a:acc) ("../":xs) = go acc xs
-                                    go acc (x:xs) = go (x:acc) xs
-                            realgitdir <- parseAbsDir $ figureOutDoubleDots sp
-                            pure $ realgitdir </> hooksDir
+    ghd <-
+        case (gd, gf) of
+            (True, False) -> pure $ gitdir </> hooksDir
+            (False, True) -> do
+                contents <- readFile gitfile
+                case splitAt (length "gitdir: ") contents of
+                    ("gitdir: ", rest) -> do
+                        case initMay rest of
+                            Just gitdirref -> do
+                                sp <- D.canonicalizePath $ toFilePath rootdir ++ gitdirref
+                                let figureOutDoubleDots = FP.joinPath . go [] . FP.splitPath
+                                      where
+                                        go acc [] = reverse acc
+                                        go (a:acc) ("../":xs) = go acc xs
+                                        go acc (x:xs) = go (x : acc) xs
+                                realgitdir <- parseAbsDir $ figureOutDoubleDots sp
+                                pure $ realgitdir </> hooksDir
     print ghd
     let preComitFile = ghd </> $(mkRelFile "pre-commit")
     writeFile preComitFile "./zift.hs run\n"
     pcf <- D.getPermissions (toFilePath preComitFile)
     D.setPermissions (toFilePath preComitFile) $ D.setOwnerExecutable True pcf
-
 
 dotGitDir :: Path Rel Dir
 dotGitDir = $(mkRelDir ".git")
