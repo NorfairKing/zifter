@@ -55,7 +55,9 @@ parseArgs = (,) <$> parseCommand <*> parseFlags
 
 parseCommand :: Parser Command
 parseCommand =
-    hsubparser $ mconcat [command "run" parseCommandRun, command "install" parseCommandInstall]
+    hsubparser $
+    mconcat
+        [command "run" parseCommandRun, command "install" parseCommandInstall]
 
 parseCommandRun :: ParserInfo Command
 parseCommandRun = info parser modifier

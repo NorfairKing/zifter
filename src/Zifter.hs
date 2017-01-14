@@ -1,6 +1,9 @@
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE RecordWildCards #-}
 
-module Zifter where
+module Zifter
+    ( ziftWith
+    ) where
 
 import Introduction
 
@@ -11,24 +14,31 @@ import qualified System.Directory as D
         setOwnerExecutable)
 import System.Environment (getProgName)
 import qualified System.FilePath as FP (splitPath, joinPath)
+import System.IO
+       (hSetBuffering, BufferMode(LineBuffering), stderr, stdout)
 import System.Process (shell, createProcess, waitForProcess)
 
+import Zifter.Hindent
 import Zifter.OptParse
+import Zifter.PreProcess.Types
 import Zifter.Types
 
-zift :: IO ()
-zift = do
+ziftWith :: ZiftSetup -> IO ()
+ziftWith setup = do
+    hSetBuffering stdout LineBuffering
+    hSetBuffering stderr LineBuffering
     (d, Settings) <- getInstructions
-    dispatch d
+    case d of
+        DispatchRun -> run setup
+        DispatchInstall -> install
 
-dispatch :: Dispatch -> IO ()
-dispatch DispatchRun = run
-dispatch DispatchInstall = install
-
-run :: IO ()
-run = do
+run :: ZiftSetup -> IO ()
+run ZiftSetup {..} = do
     rootdir <- autoRootDir
-    hindent rootdir
+    r <- preprocess ziftPreprocessor rootdir
+    case r of
+        PreProcessorSuccess () -> pure ()
+        PreProcessorFailed err -> die err
 
 autoRootDir :: IO (Path Abs Dir)
 autoRootDir = do
@@ -44,36 +54,6 @@ autoRootDir = do
             , "the zift script must be run in the right directory."
             ]
     pure here
-
-hindent :: Path Abs Dir -> IO ()
-hindent rootdir = do
-    (_, fs) <- listDirRecur rootdir
-    let sources = filter (not . hidden) $ filter ((== ".hs") . fileExtension) fs
-    ec <- createProcess (shell "hindent --version") >>= (waitForProcess . (\(_, _, _, ph) -> ph))
-    case ec of
-        ExitFailure _ -> die "Hindent was not found."
-        ExitSuccess -> do
-            phs <-
-                forM sources $ \fp -> do
-                    let cmd =
-                            unwords
-                                [ "hindent"
-                                , "--indent-size"
-                                , "4"
-                                , "--line-length"
-                                , "100"
-                                , toFilePath fp
-                                ]
-                    let cp = shell cmd
-                    (_, _, _, ph) <- createProcess cp
-                    pure (cmd, ph)
-            forM_ phs $ \(cmd, ph) -> do
-                ec <- waitForProcess ph
-                putStrLn cmd
-                print ec
-
-hidden :: Path Abs t -> Bool
-hidden = any ((Just '.' ==) . headMay) . FP.splitPath . toFilePath
 
 install :: IO ()
 install = do
@@ -95,13 +75,17 @@ install = do
                     ("gitdir: ", rest) -> do
                         case initMay rest of
                             Just gitdirref -> do
-                                sp <- D.canonicalizePath $ toFilePath rootdir ++ gitdirref
-                                let figureOutDoubleDots = FP.joinPath . go [] . FP.splitPath
+                                sp <-
+                                    D.canonicalizePath $
+                                    toFilePath rootdir ++ gitdirref
+                                let figureOutDoubleDots =
+                                        FP.joinPath . go [] . FP.splitPath
                                       where
                                         go acc [] = reverse acc
                                         go (a:acc) ("../":xs) = go acc xs
                                         go acc (x:xs) = go (x : acc) xs
-                                realgitdir <- parseAbsDir $ figureOutDoubleDots sp
+                                realgitdir <-
+                                    parseAbsDir $ figureOutDoubleDots sp
                                 pure $ realgitdir </> hooksDir
     print ghd
     let preComitFile = ghd </> $(mkRelFile "pre-commit")

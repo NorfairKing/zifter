@@ -7,6 +7,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 import Zifter
+import Zifter.Hindent
+import Zifter.Types
 
 main :: IO ()
-main = zift
+main = ziftWith $ ZiftSetup {ziftPreprocessor = hindentPreProcessor}
