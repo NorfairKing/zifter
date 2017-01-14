@@ -4,30 +4,22 @@ module Zifter.Hindent where
 
 import Introduction
 
-import Data.List (isInfixOf)
-
 import Control.Monad.Fail
 
-import qualified System.Directory as D
-       (canonicalizePath, setPermissions, getPermissions,
-        setOwnerExecutable)
-import System.Environment (getProgName)
-import qualified System.FilePath as FP (splitPath, joinPath)
+import qualified System.FilePath as FP (splitPath)
 import System.Process (shell, createProcess, waitForProcess)
 
-import Zifter.OptParse
-import Zifter.PreProcess
-import Zifter.Types
+import Zifter.Zift
 
-hindentPreProcessor :: PreProcessor ()
-hindentPreProcessor = do
+hindentZift :: Zift ()
+hindentZift = do
     () <- hindentCheckAndPrintVersion
     rootdir <- getRootDir
     fs <- liftIO $ snd <$> listDirRecur rootdir
     let sources = filter (not . hidden) $ filter ((== ".hs") . fileExtension) fs
     for_ sources hindentSingleSource
 
-hindentCheckAndPrintVersion :: PreProcessor ()
+hindentCheckAndPrintVersion :: Zift ()
 hindentCheckAndPrintVersion = do
     let cmd = "hindent --version"
     ec <-
@@ -37,9 +29,9 @@ hindentCheckAndPrintVersion = do
         ExitFailure c -> fail $ unwords [cmd, "failed with exit code", show c]
         ExitSuccess -> pure ()
 
-hindentSingleSource :: Path Abs File -> PreProcessor ()
+hindentSingleSource :: Path Abs File -> Zift ()
 hindentSingleSource file =
-    PreProcessor $ \_ -> do
+    Zift $ \_ -> do
         let cmd =
                 unwords
                     [ "hindent"
@@ -54,9 +46,9 @@ hindentSingleSource file =
         ec <- waitForProcess ph
         pure $
             case ec of
-                ExitSuccess -> PreProcessorSuccess ()
+                ExitSuccess -> ZiftSuccess ()
                 ExitFailure c ->
-                    PreProcessorFailed $
+                    ZiftFailed $
                     unwords
                         [ "Hindent failed on file"
                         , toFilePath file

@@ -4,8 +4,9 @@ module Zifter.Types where
 
 import Introduction
 
-import Zifter.PreProcess.Types
+import Zifter.Zift.Types
 
 data ZiftSetup = ZiftSetup
-    { ziftPreprocessor :: PreProcessor ()
+    { ziftPreprocessor :: Zift ()
+    , ziftChecker :: Zift ()
     } deriving (Generic)

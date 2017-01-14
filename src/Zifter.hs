@@ -7,8 +7,6 @@ module Zifter
 
 import Introduction
 
-import Data.List (isInfixOf)
-
 import qualified System.Directory as D
        (canonicalizePath, setPermissions, getPermissions,
         setOwnerExecutable)
@@ -16,12 +14,10 @@ import System.Environment (getProgName)
 import qualified System.FilePath as FP (splitPath, joinPath)
 import System.IO
        (hSetBuffering, BufferMode(LineBuffering), stderr, stdout)
-import System.Process (shell, createProcess, waitForProcess)
 
-import Zifter.Hindent
 import Zifter.OptParse
-import Zifter.PreProcess.Types
 import Zifter.Types
+import Zifter.Zift
 
 ziftWith :: ZiftSetup -> IO ()
 ziftWith setup = do
@@ -35,10 +31,14 @@ ziftWith setup = do
 run :: ZiftSetup -> IO ()
 run ZiftSetup {..} = do
     rootdir <- autoRootDir
-    r <- preprocess ziftPreprocessor rootdir
-    case r of
-        PreProcessorSuccess () -> pure ()
-        PreProcessorFailed err -> die err
+    ppr <- zift ziftPreprocessor rootdir
+    case ppr of
+        ZiftFailed err -> die err
+        ZiftSuccess () -> do
+            cr <- zift ziftChecker rootdir
+            case cr of
+                ZiftFailed err -> die err
+                ZiftSuccess () -> pure ()
 
 autoRootDir :: IO (Path Abs Dir)
 autoRootDir = do
@@ -68,6 +68,10 @@ install = do
     print gf
     ghd <-
         case (gd, gf) of
+            (True, True) -> die "The .git dir is both a file and a directory?"
+            (False, False) ->
+                die
+                    "The .git dir is nor a file nor a directory, I don't know what to do."
             (True, False) -> pure $ gitdir </> hooksDir
             (False, True) -> do
                 contents <- readFile gitfile
@@ -82,11 +86,16 @@ install = do
                                         FP.joinPath . go [] . FP.splitPath
                                       where
                                         go acc [] = reverse acc
-                                        go (a:acc) ("../":xs) = go acc xs
+                                        go (_:acc) ("../":xs) = go acc xs
                                         go acc (x:xs) = go (x : acc) xs
                                 realgitdir <-
                                     parseAbsDir $ figureOutDoubleDots sp
                                 pure $ realgitdir </> hooksDir
+                            Nothing ->
+                                die "no gitdir reference found in .git file."
+                    _ ->
+                        die
+                            "Found weird contents of the .git file. It is a file but does not start with 'gitdir: '. I don't know what to do."
     print ghd
     let preComitFile = ghd </> $(mkRelFile "pre-commit")
     writeFile preComitFile "./zift.hs run\n"

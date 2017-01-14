@@ -8,7 +8,10 @@
 
 import Zifter
 import Zifter.Hindent
+import Zifter.Stack
 import Zifter.Types
 
 main :: IO ()
-main = ziftWith $ ZiftSetup {ziftPreprocessor = hindentPreProcessor}
+main =
+    ziftWith $
+    ZiftSetup {ziftPreprocessor = hindentZift, ziftChecker = stackBuildZift}

@@ -14,8 +14,9 @@ library
     exposed-modules:
         Zifter
         Zifter.Hindent
-        Zifter.PreProcess
-        Zifter.PreProcess.Types
+        Zifter.Stack
+        Zifter.Zift
+        Zifter.Zift.Types
         Zifter.OptParse
         Zifter.OptParse.Types
         Zifter.Types
@@ -35,8 +36,8 @@ test-suite zifter-test
     type: exitcode-stdio-1.0
     main-is: Spec.hs
     other-modules:
-        Zifter.PreProcessSpec
-        Zifter.PreProcess.Gen
+        Zifter.ZiftSpec
+        Zifter.Zift.Gen
     build-depends:
         base >=4.9 && <=5,
         zifter -any,
