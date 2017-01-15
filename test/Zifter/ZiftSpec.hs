@@ -14,3 +14,4 @@ spec :: Spec
 spec = do
     eqSpec @(ZiftResult Int)
     functorSpec @ZiftResult
+    applicativeSpec @ZiftResult
