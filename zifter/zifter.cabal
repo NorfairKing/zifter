@@ -13,7 +13,6 @@ author: Tom Sydney Kerckhove
 library
     exposed-modules:
         Zifter
-        Zifter.Cabal
         Zifter.Hindent
         Zifter.OptParse
         Zifter.OptParse.Types

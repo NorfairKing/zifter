@@ -3,6 +3,7 @@
     --install-ghc
     runghc
     --package zifter
+    --package zifter-cabal
 -}
 {-# LANGUAGE OverloadedStrings #-}
 
