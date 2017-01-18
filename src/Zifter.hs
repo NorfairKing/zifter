@@ -3,6 +3,9 @@
 
 module Zifter
     ( ziftWith
+    , ziftWithSetup
+    , preprocessor
+    , checker
     ) where
 
 import Introduction
@@ -16,11 +19,15 @@ import System.IO
        (hSetBuffering, BufferMode(LineBuffering), stderr, stdout)
 
 import Zifter.OptParse
-import Zifter.Types
+import Zifter.Script
+import Zifter.Setup
 import Zifter.Zift
 
-ziftWith :: ZiftSetup -> IO ()
-ziftWith setup = do
+ziftWith :: ZiftScript () -> IO ()
+ziftWith = renderZiftScript >=> (ziftWithSetup . snd)
+
+ziftWithSetup :: ZiftSetup -> IO ()
+ziftWithSetup setup = do
     hSetBuffering stdout LineBuffering
     hSetBuffering stderr LineBuffering
     (d, Settings) <- getInstructions

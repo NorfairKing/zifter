@@ -10,6 +10,11 @@ data Zift a = Zift
     { zift :: Path Abs Dir -> IO (ZiftResult a)
     } deriving (Generic)
 
+instance Monoid a =>
+         Monoid (Zift a) where
+    mempty = Zift $ \_ -> pure mempty
+    mappend z1 z2 = Zift $ \rd -> mappend <$> zift z1 rd <*> zift z2 rd
+
 instance Functor Zift where
     fmap f (Zift iof) =
         Zift $ \rootdir -> do
@@ -54,6 +59,11 @@ instance Validity a =>
          Validity (ZiftResult a) where
     isValid (ZiftSuccess a) = isValid a
     isValid _ = True
+
+instance Monoid a =>
+         Monoid (ZiftResult a) where
+    mempty = ZiftSuccess mempty
+    mappend z1 z2 = mappend <$> z1 <*> z2
 
 instance Functor ZiftResult where
     fmap f (ZiftSuccess a) = ZiftSuccess $ f a

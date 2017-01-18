@@ -14,12 +14,16 @@ library
     exposed-modules:
         Zifter
         Zifter.Hindent
-        Zifter.Stack
-        Zifter.Zift
-        Zifter.Zift.Types
         Zifter.OptParse
         Zifter.OptParse.Types
+        Zifter.Script
+        Zifter.Script.Types
+        Zifter.Setup
+        Zifter.Setup.Types
+        Zifter.Stack
         Zifter.Types
+        Zifter.Zift
+        Zifter.Zift.Types
     build-depends:
         base >=4.9 && <=5,
         introduction,

@@ -9,9 +9,9 @@
 import Zifter
 import Zifter.Hindent
 import Zifter.Stack
-import Zifter.Types
 
 main :: IO ()
 main =
-    ziftWith $
-    ZiftSetup {ziftPreprocessor = hindentZift, ziftChecker = stackBuildZift}
+    ziftWith $ do
+        preprocessor hindentZift
+        checker stackBuildZift
