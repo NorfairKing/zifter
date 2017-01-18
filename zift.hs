@@ -4,6 +4,7 @@
     runghc
     --package zifter
     --package zifter-cabal
+    --package zifter-hindent
 -}
 {-# LANGUAGE OverloadedStrings #-}
 

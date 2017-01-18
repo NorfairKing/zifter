@@ -25,7 +25,7 @@ stackCheckAndPrintVersion = do
 
 stackBuild :: Zift ()
 stackBuild = do
-    let cleanCmd = "stack clean zifter zifter-cabal" -- TODO read the cabal file to find the target.
+    let cleanCmd = "stack clean zifter zifter-cabal zifter-hindent" -- TODO read the cabal file to find the target.
     cec <- liftIO $ system cleanCmd
     case cec of
         ExitFailure c ->

@@ -2,10 +2,12 @@
 
 module Zifter.Hindent where
 
-import Introduction
-
-import Control.Monad.Fail
-
+import Control.Monad.IO.Class
+import Data.Foldable
+import Path
+import Path.IO
+import Safe
+import System.Exit (ExitCode(..))
 import qualified System.FilePath as FP (splitPath)
 import System.Process (shell, createProcess, waitForProcess)
 
