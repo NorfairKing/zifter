@@ -2,9 +2,15 @@
 
 module Zifter.Zift.Types where
 
-import Introduction
+import Prelude hiding (fail)
 
+import Control.Concurrent.Async (async, wait)
+import Control.Exception (SomeException, displayException, catch)
 import Control.Monad.Fail
+import Control.Monad.IO.Class
+import Data.Validity
+import GHC.Generics
+import Path
 
 data Zift a = Zift
     { zift :: Path Abs Dir -> IO (ZiftResult a)

@@ -3,9 +3,8 @@ module Zifter.OptParse
     , module Zifter.OptParse.Types
     ) where
 
-import Introduction
-
 import Options.Applicative
+import System.Environment (getArgs)
 
 import Zifter.OptParse.Types
 

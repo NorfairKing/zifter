@@ -5,6 +5,7 @@
     --package zifter
     --package zifter-cabal
     --package zifter-hindent
+    --package zifter-stack
 -}
 {-# LANGUAGE OverloadedStrings #-}
 

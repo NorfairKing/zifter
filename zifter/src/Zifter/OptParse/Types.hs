@@ -1,7 +1,5 @@
 module Zifter.OptParse.Types where
 
-import Introduction
-
 type Arguments = (Command, Flags)
 
 type Instructions = (Dispatch, Settings)

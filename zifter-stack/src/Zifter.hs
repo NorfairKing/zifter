@@ -8,15 +8,12 @@ module Zifter
     , checker
     ) where
 
-import Control.Monad
-import Path
-import Path.IO
-import Safe
+import Introduction
+
 import qualified System.Directory as D
        (canonicalizePath, setPermissions, getPermissions,
         setOwnerExecutable)
 import System.Environment (getProgName)
-import System.Exit (die)
 import qualified System.FilePath as FP (splitPath, joinPath)
 import System.IO
        (hSetBuffering, BufferMode(LineBuffering), stderr, stdout)
@@ -84,7 +81,7 @@ install = do
                     "The .git dir is nor a file nor a directory, I don't know what to do."
             (True, False) -> pure $ gitdir </> hooksDir
             (False, True) -> do
-                contents <- readFile $ toFilePath gitfile
+                contents <- readFile gitfile
                 case splitAt (length "gitdir: ") contents of
                     ("gitdir: ", rest) -> do
                         case initMay rest of
@@ -108,7 +105,7 @@ install = do
                             "Found weird contents of the .git file. It is a file but does not start with 'gitdir: '. I don't know what to do."
     print ghd
     let preComitFile = ghd </> $(mkRelFile "pre-commit")
-    writeFile (toFilePath preComitFile) "./zift.hs run\n"
+    writeFile preComitFile "./zift.hs run\n"
     pcf <- D.getPermissions (toFilePath preComitFile)
     D.setPermissions (toFilePath preComitFile) $ D.setOwnerExecutable True pcf
 

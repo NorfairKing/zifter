@@ -3,7 +3,7 @@ module Zifter.Zift
     , module Zifter.Zift.Types
     ) where
 
-import Introduction
+import Path
 
 import Zifter.Zift.Types
 

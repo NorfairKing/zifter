@@ -2,10 +2,8 @@
 
 module Zifter.Stack where
 
-import Introduction
-
-import Control.Monad.Fail
-
+import Control.Monad.IO.Class
+import System.Exit (ExitCode(..))
 import System.Process (system)
 
 import Zifter.Zift
@@ -25,7 +23,7 @@ stackCheckAndPrintVersion = do
 
 stackBuild :: Zift ()
 stackBuild = do
-    let cleanCmd = "stack clean zifter zifter-cabal zifter-hindent" -- TODO read the cabal file to find the target.
+    let cleanCmd = "stack clean zifter zifter-cabal zifter-hindent zifter-stack" -- TODO read the cabal file to find the target.
     cec <- liftIO $ system cleanCmd
     case cec of
         ExitFailure c ->

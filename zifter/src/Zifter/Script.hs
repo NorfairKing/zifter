@@ -4,8 +4,6 @@ module Zifter.Script
     , module Zifter.Script.Types
     ) where
 
-import Introduction
-
 import Zifter.Script.Types
 import Zifter.Setup
 import Zifter.Zift

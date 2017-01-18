@@ -2,7 +2,7 @@
 
 module Zifter.Setup.Types where
 
-import Introduction
+import GHC.Generics
 
 import Zifter.Zift.Types
 

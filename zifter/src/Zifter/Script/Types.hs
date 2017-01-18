@@ -2,8 +2,7 @@
 
 module Zifter.Script.Types where
 
-import Introduction
-
+import GHC.Generics
 import Zifter.Setup.Types
 
 newtype ZiftScript a = ZiftScript
