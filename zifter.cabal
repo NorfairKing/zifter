@@ -13,6 +13,7 @@ author: Tom Sydney Kerckhove
 library
     exposed-modules:
         Zifter
+        Zifter.Cabal
         Zifter.Hindent
         Zifter.OptParse
         Zifter.OptParse.Types
@@ -26,11 +27,11 @@ library
         Zifter.Zift.Types
     build-depends:
         base >=4.9 && <=5,
-        introduction,
-        process >= 1.4 && < 1.5,
-        filepath >= 1.4 && < 1.5,
-        directory >= 1.2 && < 1.3,
-        optparse-applicative >= 0.12 && < 0.13
+        introduction -any,
+        process >=1.4 && <1.5,
+        filepath >=1.4 && <1.5,
+        directory >=1.2 && <1.3,
+        optparse-applicative >=0.12 && <0.13
     default-language: Haskell2010
     default-extensions: NoImplicitPrelude
     hs-source-dirs: src/
@@ -39,15 +40,15 @@ library
 test-suite zifter-test
     type: exitcode-stdio-1.0
     main-is: Spec.hs
-    other-modules:
-        Zifter.ZiftSpec
-        Zifter.Zift.Gen
     build-depends:
         base >=4.9 && <=5,
         zifter -any,
         hspec -any,
-        introduction-test
+        introduction-test -any
     default-language: Haskell2010
     default-extensions: NoImplicitPrelude
     hs-source-dirs: test/
+    other-modules:
+        Zifter.ZiftSpec
+        Zifter.Zift.Gen
     ghc-options: -threaded -rtsopts -with-rtsopts=-N -Wall

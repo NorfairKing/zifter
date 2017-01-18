@@ -7,11 +7,14 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 import Zifter
+import Zifter.Cabal
 import Zifter.Hindent
 import Zifter.Stack
 
 main :: IO ()
 main =
     ziftWith $ do
-        preprocessor hindentZift
+        preprocessor $ do
+            hindentZift
+            cabalFormatZift
         checker stackBuildZift
