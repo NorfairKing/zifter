@@ -4,7 +4,8 @@ module Zifter.ZiftSpec
     ( spec
     ) where
 
-import TestIntroduction
+import Test.Hspec
+import Test.Validity
 
 import Zifter.Zift
 

@@ -15,7 +15,6 @@ library
         Zifter.Hindent
     build-depends:
         base >=4.9 && <=5,
-        introduction -any,
         process >=1.4 && <1.5,
         filepath >=1.4 && <1.5,
         directory >=1.2 && <1.3,

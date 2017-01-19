@@ -1,6 +1,8 @@
+{-# OPTIONS_GHC -Wno-orphans #-}
+
 module Zifter.Zift.Gen where
 
-import TestIntroduction
+import Data.GenValidity
 
 import Zifter.Zift.Types
 
