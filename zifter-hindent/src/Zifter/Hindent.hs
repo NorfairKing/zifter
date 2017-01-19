@@ -16,8 +16,8 @@ import Zifter.Zift
 hindentZift :: Zift ()
 hindentZift = do
     () <- hindentCheckAndPrintVersion
-    rootdir <- getRootDir
-    fs <- liftIO $ snd <$> listDirRecur rootdir
+    rd <- getRootDir
+    fs <- liftIO $ snd <$> listDirRecur rd
     let sources = filter (not . hidden) $ filter ((== ".hs") . fileExtension) fs
     for_ sources hindentSingleSource
 

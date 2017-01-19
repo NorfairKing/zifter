@@ -1,3 +1,5 @@
+{-# LANGUAGE RecordWildCards #-}
+
 module Zifter.OptParse
     ( module Zifter.OptParse
     , module Zifter.OptParse.Types
@@ -15,8 +17,9 @@ getInstructions = do
     combineToInstructions cmd flags config
 
 combineToInstructions :: Command -> Flags -> Configuration -> IO Instructions
-combineToInstructions cmd Flags Configuration = pure (d, Settings)
+combineToInstructions cmd Flags {..} Configuration = pure (d, sets)
   where
+    sets = Settings {setsOutputColor = flagsOutputColor}
     d =
         case cmd of
             CommandRun -> DispatchRun
@@ -36,7 +39,7 @@ runArgumentsParser = execParserPure pfs argParser
   where
     pfs =
         ParserPrefs
-        { prefMultiSuffix = "ZIFTER"
+        { prefMultiSuffix = ""
         , prefDisambiguate = True
         , prefShowHelpOnError = True
         , prefBacktrack = True
@@ -71,4 +74,27 @@ parseCommandInstall = info parser modifier
     modifier = fullDesc <> progDesc "Install the zift script."
 
 parseFlags :: Parser Flags
-parseFlags = pure Flags
+parseFlags = Flags <$> doubleSwitch "color" "color in output." mempty
+
+doubleSwitch :: String -> String -> Mod FlagFields Bool -> Parser Bool
+doubleSwitch name helpText mods =
+    let enabledValue = True
+        disabledValue = False
+        defaultValue = True
+    in (last <$>
+        some
+            ((flag'
+                  enabledValue
+                  (hidden <> internal <> long name <> help helpText <> mods) <|>
+              flag'
+                  disabledValue
+                  (hidden <> internal <> long ("no-" ++ name) <> help helpText <>
+                   mods)) <|>
+             flag'
+                 disabledValue
+                 (long ("[no-]" ++ name) <>
+                  help
+                      ("Enable/disable " ++
+                       helpText ++ " (default: " ++ show defaultValue ++ ")") <>
+                  mods))) <|>
+       pure defaultValue

@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module Zifter.Zift.Types where
 
@@ -12,8 +13,18 @@ import Data.Validity
 import GHC.Generics
 import Path
 
+import Zifter.OptParse.Types
+
+data ZiftContext = ZiftContext
+    { rootdir :: Path Abs Dir
+    , settings :: Settings
+    } deriving (Show, Eq, Generic)
+
+instance Validity ZiftContext where
+    isValid _ = True -- TODO check validity of the root dir.
+
 data Zift a = Zift
-    { zift :: Path Abs Dir -> IO (ZiftResult a)
+    { zift :: ZiftContext -> IO (ZiftResult a)
     } deriving (Generic)
 
 instance Monoid a =>
@@ -30,9 +41,9 @@ instance Functor Zift where
 instance Applicative Zift where
     pure a = Zift $ \_ -> pure $ pure a
     (Zift faf) <*> (Zift af) =
-        Zift $ \rd -> do
-            faa <- async $ faf rd
-            aa <- async $ af rd
+        Zift $ \zc -> do
+            faa <- async $ faf zc
+            aa <- async $ af zc
             fa <- wait faa -- TODO fail immediately if either already fails.
             a <- wait aa
             pure $ fa <*> a

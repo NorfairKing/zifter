@@ -9,9 +9,9 @@ data Command
     | CommandInstall
     deriving (Show, Eq)
 
-data Flags =
-    Flags
-    deriving (Show, Eq)
+data Flags = Flags
+    { flagsOutputColor :: Bool
+    } deriving (Show, Eq)
 
 data Configuration =
     Configuration
@@ -22,6 +22,6 @@ data Dispatch
     | DispatchInstall
     deriving (Show, Eq)
 
-data Settings =
-    Settings
-    deriving (Show, Eq)
+data Settings = Settings
+    { setsOutputColor :: Bool
+    } deriving (Show, Eq)

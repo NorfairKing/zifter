@@ -21,6 +21,8 @@ import qualified System.FilePath as FP (splitPath, joinPath)
 import System.IO
        (hSetBuffering, BufferMode(LineBuffering), stderr, stdout)
 
+import System.Console.ANSI
+
 import Zifter.OptParse
 import Zifter.Script
 import Zifter.Setup
@@ -33,22 +35,38 @@ ziftWithSetup :: ZiftSetup -> IO ()
 ziftWithSetup setup = do
     hSetBuffering stdout LineBuffering
     hSetBuffering stderr LineBuffering
-    (d, Settings) <- getInstructions
+    (d, sets) <- getInstructions
     case d of
-        DispatchRun -> run setup
+        DispatchRun -> run sets setup
         DispatchInstall -> install
 
-run :: ZiftSetup -> IO ()
-run ZiftSetup {..} = do
-    rootdir <- autoRootDir
-    ppr <- zift ziftPreprocessor rootdir
+run :: Settings -> ZiftSetup -> IO ()
+run sets ZiftSetup {..} = do
+    rd <- autoRootDir
+    let ctx = ZiftContext rd sets
+    ppr <- zift (runAsPreProcessor ziftPreprocessor) ctx
     case ppr of
         ZiftFailed err -> die err
         ZiftSuccess () -> do
-            cr <- zift ziftChecker rootdir
+            cr <- zift (runAsChecker ziftChecker) ctx
             case cr of
                 ZiftFailed err -> die err
                 ZiftSuccess () -> pure ()
+
+runAsPreProcessor :: Zift () -> Zift ()
+runAsPreProcessor func = do
+    printZiftMessage "PREPROCESSOR STARTING"
+    func
+    printZiftMessage "PREPROCESSOR DONE"
+
+runAsChecker :: Zift () -> Zift ()
+runAsChecker func = do
+    printZiftMessage "CHECKER STARTING"
+    func
+    printZiftMessage "CHECKER DONE"
+
+printZiftMessage :: String -> Zift ()
+printZiftMessage = printWithColors [SetColor Foreground Dull Blue]
 
 autoRootDir :: IO (Path Abs Dir)
 autoRootDir = do
