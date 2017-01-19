@@ -1,0 +1,15 @@
+resolver: lts-7.14
+packages:
+- zifter
+- zifter-cabal
+- zifter-hindent
+- zifter-stack
+extra-deps:
+- genvalidity-containers-0.1.0.2
+- genvalidity-text-0.1.0.1
+- introduction-0.0.1.0
+- introduction-test-0.0.1.0
+- validity-containers-0.1.0.1
+- validity-text-0.1.0.1
+flags: {}
+extra-package-dbs: []
