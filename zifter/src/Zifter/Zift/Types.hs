@@ -5,6 +5,7 @@ module Zifter.Zift.Types where
 
 import Prelude hiding (fail)
 
+import Control.Concurrent (MVar)
 import Control.Concurrent.Async (async, wait)
 import Control.Exception (SomeException, displayException, catch)
 import Control.Monad.Fail
@@ -18,7 +19,8 @@ import Zifter.OptParse.Types
 data ZiftContext = ZiftContext
     { rootdir :: Path Abs Dir
     , settings :: Settings
-    } deriving (Show, Eq, Generic)
+    , printvar :: MVar ()
+    } deriving (Eq, Generic)
 
 instance Validity ZiftContext where
     isValid _ = True -- TODO check validity of the root dir.

@@ -26,14 +26,21 @@ cabalCheckAndPrintVersion = do
 
 cabalFormat :: Zift ()
 cabalFormat = do
-    let formatCmd = "cabal format" -- TODO read the cabal file to find the target.
     rd <- getRootDir
     cabalFiles <-
         liftIO $
         (filter ((".cabal" ==) . fileExtension) . snd) <$> listDirRecur rd
-    for_ cabalFiles $ \cabalFile -> do
-        cec <- liftIO $ system $ unwords [formatCmd, toFilePath cabalFile]
-        case cec of
-            ExitFailure c ->
-                fail $ unwords [formatCmd, "failed with exit code", show c]
-            ExitSuccess -> pure ()
+    for_ cabalFiles formatSingleCabalFile
+
+formatSingleCabalFile :: Path Abs File -> Zift ()
+formatSingleCabalFile cabalFile = do
+    let formatCmd = "cabal format"
+    cec <- liftIO $ system $ unwords [formatCmd, toFilePath cabalFile]
+    case cec of
+        ExitFailure c -> do
+            printPreprocessingError $
+                unwords ["Failed to format cabal file:", toFilePath cabalFile]
+            fail $ unwords [formatCmd, "failed with exit code", show c]
+        ExitSuccess ->
+            printPreprocessingDone $
+            unwords ["Formatted cabal file:", toFilePath cabalFile]

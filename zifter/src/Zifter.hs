@@ -8,6 +8,7 @@ module Zifter
     , checker
     ) where
 
+import Control.Concurrent (newMVar)
 import Control.Monad
 import Path
 import Path.IO
@@ -19,7 +20,7 @@ import System.Environment (getProgName)
 import System.Exit (die)
 import qualified System.FilePath as FP (splitPath, joinPath)
 import System.IO
-       (hSetBuffering, BufferMode(LineBuffering), stderr, stdout)
+       (hSetBuffering, BufferMode(NoBuffering), stderr, stdout)
 
 import System.Console.ANSI
 
@@ -33,8 +34,8 @@ ziftWith = renderZiftScript >=> (ziftWithSetup . snd)
 
 ziftWithSetup :: ZiftSetup -> IO ()
 ziftWithSetup setup = do
-    hSetBuffering stdout LineBuffering
-    hSetBuffering stderr LineBuffering
+    hSetBuffering stdout NoBuffering
+    hSetBuffering stderr NoBuffering
     (d, sets) <- getInstructions
     case d of
         DispatchRun -> run sets setup
@@ -43,13 +44,18 @@ ziftWithSetup setup = do
 run :: Settings -> ZiftSetup -> IO ()
 run sets ZiftSetup {..} = do
     rd <- autoRootDir
-    let ctx = ZiftContext rd sets
-    ppr <- zift (runAsPreProcessor ziftPreprocessor) ctx
-    case ppr of
-        ZiftFailed err -> die err
-        ZiftSuccess () -> do
-            cr <- zift (runAsChecker ziftChecker) ctx
-            case cr of
+    printvar <- newMVar ()
+    let ctx = ZiftContext rd sets printvar
+    withSystemTempDir "zifter" $ \d ->
+        withCurrentDir d $ do
+            r <-
+                flip zift ctx $ do
+                    printZiftMessage
+                        ("CHANGED WORKING DIRECTORY TO " ++ toFilePath d)
+                    runAsPreProcessor ziftPreprocessor
+                    runAsChecker ziftChecker
+                    printZiftMessage "ZIFTER DONE"
+            case r of
                 ZiftFailed err -> die err
                 ZiftSuccess () -> pure ()
 

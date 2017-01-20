@@ -14,10 +14,10 @@ import Zifter.Cabal
 import Zifter.Hindent
 import Zifter.Stack
 
+import Data.Foldable
+
 main :: IO ()
 main =
     ziftWith $ do
-        preprocessor $ do
-            hindentZift
-            cabalFormatZift
+        preprocessor $ sequenceA_ [hindentZift, cabalFormatZift]
         checker stackBuildZift

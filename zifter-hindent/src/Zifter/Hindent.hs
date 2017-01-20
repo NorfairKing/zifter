@@ -32,31 +32,31 @@ hindentCheckAndPrintVersion = do
         ExitSuccess -> pure ()
 
 hindentSingleSource :: Path Abs File -> Zift ()
-hindentSingleSource file =
-    Zift $ \_ -> do
-        let cmd =
+hindentSingleSource file = do
+    let cmd =
+            unwords
+                [ "hindent"
+                , "--indent-size"
+                , "4"
+                , "--line-length"
+                , "80"
+                , toFilePath file
+                ]
+    let cp = shell cmd
+    ec <-
+        liftIO $ do
+            (_, _, _, ph) <- createProcess cp
+            waitForProcess ph
+    case ec of
+        ExitSuccess ->
+            printPreprocessingDone $
+            unwords
+                ["Formatted Haskell source file with hindent:", toFilePath file]
+        ExitFailure c -> do
+            printPreprocessingError $
                 unwords
-                    [ "hindent"
-                    , "--indent-size"
-                    , "4"
-                    , "--line-length"
-                    , "80"
-                    , toFilePath file
-                    ]
-        let cp = shell cmd
-        (_, _, _, ph) <- createProcess cp
-        ec <- waitForProcess ph
-        pure $
-            case ec of
-                ExitSuccess -> ZiftSuccess ()
-                ExitFailure c ->
-                    ZiftFailed $
-                    unwords
-                        [ "Hindent failed on file"
-                        , toFilePath file
-                        , "with exit code"
-                        , show c
-                        ]
+                    ["Failed to format Haskell source file:", toFilePath file]
+            fail $ unwords [cmd, "failed", "with exit code", show c]
 
 hidden :: Path Abs t -> Bool
 hidden = any ((Just '.' ==) . headMay) . FP.splitPath . toFilePath
