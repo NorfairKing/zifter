@@ -4,6 +4,7 @@ packages:
 - zifter-cabal
 - zifter-hindent
 - zifter-stack
+- zifter-hlint
 extra-deps:
 - genvalidity-hspec-0.3.0.0
 - genvalidity-0.3.0.0

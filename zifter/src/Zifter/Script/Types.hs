@@ -13,7 +13,7 @@ instance Functor ZiftScript where
     fmap f (ZiftScript func) =
         ZiftScript $ do
             (a, zs) <- func
-            pure $ (f a, zs)
+            pure (f a, zs)
 
 instance Applicative ZiftScript where
     pure a = ZiftScript $ pure (a, mempty)
@@ -21,7 +21,7 @@ instance Applicative ZiftScript where
         ZiftScript $ do
             (f, z1) <- funcf
             (a, z2) <- funca
-            pure $ (f a, z1 `mappend` z2)
+            pure (f a, z1 `mappend` z2)
 
 instance Monad ZiftScript where
     (ZiftScript afunc) >>= func =
@@ -29,4 +29,4 @@ instance Monad ZiftScript where
             (a, z1) <- afunc
             let (ZiftScript bfunc) = func a
             (b, z2) <- bfunc
-            pure $ (b, z1 `mappend` z2)
+            pure (b, z1 `mappend` z2)

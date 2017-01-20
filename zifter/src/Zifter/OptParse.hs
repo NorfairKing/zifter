@@ -34,7 +34,7 @@ getArguments = do
     let result = runArgumentsParser args
     handleParseResult result
 
-runArgumentsParser :: [[Char]] -> ParserResult Arguments
+runArgumentsParser :: [String] -> ParserResult Arguments
 runArgumentsParser = execParserPure pfs argParser
   where
     pfs =

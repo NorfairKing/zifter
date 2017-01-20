@@ -1,5 +1,3 @@
-{-# LANGUAGE TemplateHaskell #-}
-
 module Zifter.Stack where
 
 import Control.Monad
@@ -62,7 +60,7 @@ stackBuild = do
                 fail $ unwords [cleanCmd, "failed with exit code", show c]
             ExitSuccess -> pure ()
         forM_ targets $ \target -> do
-            let buildCmd = "stack build --pedantic " ++ target
+            let buildCmd = "stack build --pedantic --haddock --test " ++ target
             bec <-
                 liftIO $ do
                     (_, _, _, bph) <-

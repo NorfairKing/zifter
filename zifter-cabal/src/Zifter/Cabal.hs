@@ -1,5 +1,3 @@
-{-# LANGUAGE TemplateHaskell #-}
-
 module Zifter.Cabal where
 
 import Control.Monad.IO.Class

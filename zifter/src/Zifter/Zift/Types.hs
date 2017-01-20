@@ -1,5 +1,4 @@
 {-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE RecordWildCards #-}
 
 module Zifter.Zift.Types where
 
@@ -36,8 +35,8 @@ instance Monoid a =>
 
 instance Functor Zift where
     fmap f (Zift iof) =
-        Zift $ \rootdir -> do
-            r <- iof rootdir
+        Zift $ \rd -> do
+            r <- iof rd
             pure $ fmap f r
 
 instance Applicative Zift where
@@ -46,7 +45,7 @@ instance Applicative Zift where
         Zift $ \zc -> do
             faa <- async $ faf zc
             aa <- async $ af zc
-            fa <- wait faa -- TODO fail immediately if either already fails.
+            fa <- wait faa
             a <- wait aa
             pure $ fa <*> a
 
@@ -64,7 +63,7 @@ instance MonadFail Zift where
     fail s = Zift $ \_ -> pure $ fail s
 
 instance MonadIO Zift where
-    liftIO act = Zift $ \_ -> do (ZiftSuccess <$> act) `catch` handler
+    liftIO act = Zift $ \_ -> (ZiftSuccess <$> act) `catch` handler
       where
         handler :: SomeException -> IO (ZiftResult a)
         handler ex = pure $ ZiftFailed $ displayException ex
@@ -89,7 +88,7 @@ instance Functor ZiftResult where
     fmap _ (ZiftFailed s) = ZiftFailed s
 
 instance Applicative ZiftResult where
-    pure a = ZiftSuccess a
+    pure = ZiftSuccess
     (ZiftSuccess f) <*> (ZiftSuccess a) = ZiftSuccess $ f a
     (ZiftFailed e) <*> (ZiftSuccess _) = ZiftFailed e
     (ZiftSuccess _) <*> (ZiftFailed e) = ZiftFailed e

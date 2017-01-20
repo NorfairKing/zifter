@@ -1,5 +1,3 @@
-{-# LANGUAGE TemplateHaskell #-}
-
 module Zifter.Hindent where
 
 import Control.Monad.IO.Class

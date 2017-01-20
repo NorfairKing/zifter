@@ -110,7 +110,7 @@ install = do
             (False, True) -> do
                 contents <- readFile $ toFilePath gitfile
                 case splitAt (length "gitdir: ") contents of
-                    ("gitdir: ", rest) -> do
+                    ("gitdir: ", rest) ->
                         case initMay rest of
                             Just gitdirref -> do
                                 sp <-
