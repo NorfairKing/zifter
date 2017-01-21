@@ -16,11 +16,9 @@ import Zifter.Hindent
 import Zifter.Hlint
 import Zifter.Stack
 
-import Data.Foldable
-
 main :: IO ()
 main =
     ziftWith $ do
-        preprocessor $ sequenceA_ [hindentZift, cabalFormatZift]
+        preprocessor $ ziftP [hindentZift, cabalFormatZift]
         checker stackBuildZift
             -- hlintZift TODO(syd) put this back when hlint is fixed to handle -XTypeApplications

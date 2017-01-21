@@ -2,6 +2,7 @@ module Zifter.Zift
     ( getRootDir
     , getSettings
     , getSetting
+    , ziftP
     , printPreprocessingDone
     , printPreprocessingError
     , printWithColors
@@ -12,6 +13,7 @@ module Zifter.Zift
 import Control.Concurrent
 import Control.Monad
 import Control.Monad.IO.Class (liftIO)
+import Data.Foldable
 
 import System.Console.ANSI
 import System.IO
@@ -29,6 +31,9 @@ getSettings = Zift $ \zc -> pure $ ZiftSuccess $ settings zc
 
 getSetting :: (Settings -> a) -> Zift a
 getSetting func = func <$> getSettings
+
+ziftP :: [Zift ()] -> Zift ()
+ziftP = sequenceA_
 
 getPrintVar :: Zift (MVar ())
 getPrintVar = Zift $ \zc -> pure $ ZiftSuccess $ printvar zc

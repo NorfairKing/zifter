@@ -2,10 +2,16 @@ module Zifter.Stack where
 
 import Control.Monad
 import Control.Monad.IO.Class
-import Data.List
 import Path
+import Path.IO
 import System.Exit (ExitCode(..))
 import System.Process
+
+import Distribution.Package
+import Distribution.PackageDescription
+import Distribution.PackageDescription.Configuration
+import Distribution.PackageDescription.Parse
+import Distribution.Verbosity
 
 import Zifter.Zift
 
@@ -25,29 +31,26 @@ stackCheckAndPrintVersion = do
 stackGetPackageTargetTuples :: Zift [(String, [String])]
 stackGetPackageTargetTuples = do
     rd <- getRootDir
-    ((_, _, psstr), (_, _, tsstr)) <-
-        (,) <$>
-        liftIO
-            (readCreateProcessWithExitCode
-                 ((shell "stack ide packages") {cwd = Just $ toFilePath rd})
-                 "") <*>
-        liftIO
-            (readCreateProcessWithExitCode
-                 ((shell "stack ide targets") {cwd = Just $ toFilePath rd})
-                 "")
-    pure $ matchUpPackagesAndTargets (lines psstr) (lines tsstr)
-
-matchUpPackagesAndTargets :: [String] -> [String] -> [(String, [String])]
-matchUpPackagesAndTargets packages targets =
-    flip map packages $ \package ->
-        (package, filter ((package ++ ":") `isPrefixOf`) targets)
+    (_, fs) <- liftIO $ listDirRecur rd
+    let cabalFiles = filter ((== ".cabal") . fileExtension) fs
+    (concat <$>) $
+        forM cabalFiles $ \cabalFile -> do
+            pd <-
+                liftIO $ readPackageDescription deafening $ toFilePath cabalFile
+            let packageDesc = flattenPackageDescription pd
+                name = unPackageName $ pkgName $ package packageDesc
+                libname = name ++ ":lib"
+                testnames =
+                    map (((name ++ ":test:") ++) . testName) $
+                    testSuites packageDesc
+            pure [(name, libname : testnames)]
 
 stackBuild :: Zift ()
 stackBuild = do
     rd <- getRootDir
     tups <- stackGetPackageTargetTuples
-    forM_ tups $ \(package, targets) -> do
-        let cleanCmd = "stack clean " ++ package
+    forM_ tups $ \(package_, targets) -> do
+        let cleanCmd = "stack clean " ++ package_
         cec <-
             liftIO $ do
                 (_, _, _, ph) <-

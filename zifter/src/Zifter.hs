@@ -6,6 +6,8 @@ module Zifter
     , ziftWithSetup
     , preprocessor
     , checker
+    , ziftP
+    , module Zifter.Script.Types
     ) where
 
 import Control.Concurrent (newMVar)
@@ -26,6 +28,7 @@ import System.Console.ANSI
 
 import Zifter.OptParse
 import Zifter.Script
+import Zifter.Script.Types
 import Zifter.Setup
 import Zifter.Zift
 
@@ -96,10 +99,6 @@ install = do
     gd <- doesDirExist gitdir
     let gitfile = rootdir </> dotGitFile
     gf <- doesFileExist gitfile
-    print gitdir
-    print gd
-    print gitfile
-    print gf
     ghd <-
         case (gd, gf) of
             (True, True) -> die "The .git dir is both a file and a directory?"
@@ -130,8 +129,9 @@ install = do
                     _ ->
                         die
                             "Found weird contents of the .git file. It is a file but does not start with 'gitdir: '. I don't know what to do."
-    print ghd
     let preComitFile = ghd </> $(mkRelFile "pre-commit")
+    putStrLn $
+        unwords ["Installed pre-commit script in", toFilePath preComitFile]
     writeFile (toFilePath preComitFile) "./zift.hs run\n"
     pcf <- D.getPermissions (toFilePath preComitFile)
     D.setPermissions (toFilePath preComitFile) $ D.setOwnerExecutable True pcf
