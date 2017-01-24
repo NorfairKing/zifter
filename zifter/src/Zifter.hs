@@ -7,6 +7,7 @@ module Zifter
     , preprocessor
     , checker
     , ziftP
+    , recursiveZift
     , module Zifter.Script.Types
     ) where
 
@@ -24,9 +25,8 @@ import qualified System.FilePath as FP (splitPath, joinPath)
 import System.IO
        (hSetBuffering, BufferMode(NoBuffering), stderr, stdout)
 
-import System.Console.ANSI
-
 import Zifter.OptParse
+import Zifter.Recurse
 import Zifter.Script
 import Zifter.Script.Types
 import Zifter.Setup
@@ -41,11 +41,26 @@ ziftWithSetup setup = do
     hSetBuffering stderr NoBuffering
     (d, sets) <- getInstructions
     case d of
-        DispatchRun -> run sets setup
+        DispatchRun -> run setup sets
+        DispatchPreProcess -> runPreProcessor setup sets
+        DispatchCheck -> runChecker setup sets
         DispatchInstall -> install
 
-run :: Settings -> ZiftSetup -> IO ()
-run sets ZiftSetup {..} = do
+run :: ZiftSetup -> Settings -> IO ()
+run ZiftSetup {..} =
+    runWith $ \_ -> do
+        runAsPreProcessor ziftPreprocessor
+        runAsChecker ziftChecker
+
+runPreProcessor :: ZiftSetup -> Settings -> IO ()
+runPreProcessor ZiftSetup {..} =
+    runWith $ \_ -> runAsPreProcessor ziftPreprocessor
+
+runChecker :: ZiftSetup -> Settings -> IO ()
+runChecker ZiftSetup {..} = runWith $ \_ -> runAsChecker ziftChecker
+
+runWith :: (ZiftContext -> Zift ()) -> Settings -> IO ()
+runWith func sets = do
     rd <- autoRootDir
     printvar <- newMVar ()
     let ctx = ZiftContext rd sets printvar
@@ -55,8 +70,7 @@ run sets ZiftSetup {..} = do
                 flip zift ctx $ do
                     printZiftMessage
                         ("CHANGED WORKING DIRECTORY TO " ++ toFilePath d)
-                    runAsPreProcessor ziftPreprocessor
-                    runAsChecker ziftChecker
+                    func ctx
                     printZiftMessage "ZIFTER DONE"
             case r of
                 ZiftFailed err -> die err
@@ -73,9 +87,6 @@ runAsChecker func = do
     printZiftMessage "CHECKER STARTING"
     func
     printZiftMessage "CHECKER DONE"
-
-printZiftMessage :: String -> Zift ()
-printZiftMessage = printWithColors [SetColor Foreground Dull Blue]
 
 autoRootDir :: IO (Path Abs Dir)
 autoRootDir = do

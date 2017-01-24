@@ -7,9 +7,11 @@ type Instructions = (Dispatch, Settings)
 data Command
     = CommandRun
     | CommandInstall
+    | CommandPreProcess
+    | CommandCheck
     deriving (Show, Eq)
 
-data Flags = Flags
+newtype Flags = Flags
     { flagsOutputColor :: Bool
     } deriving (Show, Eq)
 
@@ -20,8 +22,10 @@ data Configuration =
 data Dispatch
     = DispatchRun
     | DispatchInstall
+    | DispatchPreProcess
+    | DispatchCheck
     deriving (Show, Eq)
 
-data Settings = Settings
+newtype Settings = Settings
     { setsOutputColor :: Bool
     } deriving (Show, Eq)

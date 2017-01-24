@@ -7,6 +7,7 @@ import Prelude hiding (fail)
 import Control.Concurrent (MVar)
 import Control.Concurrent.Async (async, wait)
 import Control.Exception (SomeException, displayException, catch)
+import Control.Monad.Catch (MonadThrow(..))
 import Control.Monad.Fail
 import Control.Monad.IO.Class
 import Data.Validity
@@ -24,7 +25,7 @@ data ZiftContext = ZiftContext
 instance Validity ZiftContext where
     isValid _ = True -- TODO check validity of the root dir.
 
-data Zift a = Zift
+newtype Zift a = Zift
     { zift :: ZiftContext -> IO (ZiftResult a)
     } deriving (Generic)
 
@@ -67,6 +68,9 @@ instance MonadIO Zift where
       where
         handler :: SomeException -> IO (ZiftResult a)
         handler ex = pure $ ZiftFailed $ displayException ex
+
+instance MonadThrow Zift where
+    throwM e = Zift $ \_ -> throwM e
 
 data ZiftResult a
     = ZiftSuccess a

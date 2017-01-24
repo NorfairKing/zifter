@@ -19,6 +19,8 @@ import Zifter.Stack
 main :: IO ()
 main =
     ziftWith $ do
+        recursiveZift
         preprocessor $ ziftP [hindentZift, cabalFormatZift]
-        checker stackBuildZift
-            -- hlintZift TODO(syd) put this back when hlint is fixed to handle -XTypeApplications
+        checker $ do
+            hlintZift
+            stackBuildZift

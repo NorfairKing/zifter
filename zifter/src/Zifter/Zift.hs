@@ -3,6 +3,7 @@ module Zifter.Zift
     , getSettings
     , getSetting
     , ziftP
+    , printZiftMessage
     , printPreprocessingDone
     , printPreprocessingError
     , printWithColors
@@ -37,6 +38,9 @@ ziftP = sequenceA_
 
 getPrintVar :: Zift (MVar ())
 getPrintVar = Zift $ \zc -> pure $ ZiftSuccess $ printvar zc
+
+printZiftMessage :: String -> Zift ()
+printZiftMessage = printWithColors [SetColor Foreground Dull Blue]
 
 printPreprocessingDone :: String -> Zift ()
 printPreprocessingDone = printWithColors [SetColor Foreground Dull Green]
