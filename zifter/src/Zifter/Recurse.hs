@@ -23,12 +23,14 @@ recursiveZift = do
 recursively :: (Path Abs File -> Zift ()) -> Zift ()
 recursively func = do
     fs <- findZiftFilesRecursively
-    printPreprocessingDone "RECURSIVE ZIFT PREPROCESSING STARTING"
+    rd <- getRootDir
+    printPreprocessingDone $
+        unwords ["RECURSIVE ZIFT STARTING AT", toFilePath rd]
     -- Do it in serial (for errors to show up nicely)
     -- TODO make it possible to run them in parallel instead?
     --      we might have to make it possible for zift to output something machine-readible instead.
     forM_ fs func
-    printPreprocessingDone "RECURSIVE ZIFT PREPROCESSING DONE"
+    printPreprocessingDone $ unwords ["RECURSIVE ZIFT DONE AT", toFilePath rd]
 
 runZiftScript :: Path Abs File -> String -> Zift ()
 runZiftScript scriptPath command = do

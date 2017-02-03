@@ -6,6 +6,7 @@ module Zifter
     , ziftWithSetup
     , preprocessor
     , checker
+    , precheck
     , ziftP
     , recursiveZift
     , module Zifter.Script.Types

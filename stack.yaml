@@ -2,10 +2,11 @@ resolver: lts-7.14
 packages:
 - zifter
 - zifter-cabal
-- zifter-hindent
-- zifter-stack
-- zifter-hlint
+- zifter-git
 - zifter-google-java-format
+- zifter-hindent
+- zifter-hlint
+- zifter-stack
 extra-deps:
 - genvalidity-hspec-0.3.0.0
 - genvalidity-0.3.0.0
