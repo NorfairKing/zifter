@@ -40,10 +40,14 @@ stackGetPackageTargetTuples = do
             let packageDesc = flattenPackageDescription pd
                 name = unPackageName $ pkgName $ package packageDesc
                 libname = name ++ ":lib"
+                lib =
+                    case library packageDesc of
+                        Nothing -> []
+                        Just _ -> [libname]
                 testnames =
                     map (((name ++ ":test:") ++) . testName) $
                     testSuites packageDesc
-            pure [(name, libname : testnames)]
+            pure [(name, lib ++ testnames)]
 
 stackBuild :: Zift ()
 stackBuild = do

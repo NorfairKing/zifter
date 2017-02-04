@@ -5,6 +5,7 @@ module Zifter.OptParse
     , module Zifter.OptParse.Types
     ) where
 
+import Data.Monoid
 import Options.Applicative
 import System.Environment (getArgs)
 
