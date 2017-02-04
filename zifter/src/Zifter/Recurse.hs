@@ -2,6 +2,7 @@
 
 module Zifter.Recurse
     ( recursiveZift
+    , recursively
     ) where
 
 import Control.Monad

@@ -45,7 +45,7 @@ ziftWithSetup setup = do
         DispatchRun -> run setup sets
         DispatchPreProcess -> runPreProcessor setup sets
         DispatchCheck -> runChecker setup sets
-        DispatchInstall -> install
+        DispatchInstall r -> install r sets
 
 run :: ZiftSetup -> Settings -> IO ()
 run ZiftSetup {..} =
@@ -111,9 +111,15 @@ autoRootDir = do
             ]
     pure here
 
-install :: IO ()
-install = do
-    rootdir <- autoRootDir
+install :: Bool -> Settings -> IO ()
+install recursive sets =
+    if recursive
+        then flip runWith sets $ \_ ->
+                 recursively $ \ziftFile -> liftIO $ installIn $ parent ziftFile
+        else autoRootDir >>= installIn
+
+installIn :: Path Abs Dir -> IO ()
+installIn rootdir = do
     let gitdir = rootdir </> dotGitDir
     gd <- doesDirExist gitdir
     let gitfile = rootdir </> dotGitFile
@@ -149,11 +155,27 @@ install = do
                         die
                             "Found weird contents of the .git file. It is a file but does not start with 'gitdir: '. I don't know what to do."
     let preComitFile = ghd </> $(mkRelFile "pre-commit")
-    putStrLn $
-        unwords ["Installed pre-commit script in", toFilePath preComitFile]
-    writeFile (toFilePath preComitFile) "./zift.hs run\n"
-    pcf <- D.getPermissions (toFilePath preComitFile)
-    D.setPermissions (toFilePath preComitFile) $ D.setOwnerExecutable True pcf
+    mc <- forgivingAbsence $ readFile $ toFilePath preComitFile
+    let hookContents = "./zift.hs run\n"
+    let justDoIt = do
+            putStrLn $
+                unwords
+                    ["Installed pre-commit script in", toFilePath preComitFile]
+            writeFile (toFilePath preComitFile) hookContents
+            pcf <- D.getPermissions (toFilePath preComitFile)
+            D.setPermissions (toFilePath preComitFile) $
+                D.setOwnerExecutable True pcf
+    case mc of
+        Nothing -> justDoIt
+        Just "" -> justDoIt
+        Just c ->
+            if c == hookContents
+                then putStrLn "Hook already installed."
+                else die $
+                     unlines
+                         [ "Not installing, a pre-commit hook already exists:"
+                         , show c
+                         ]
 
 dotGitDir :: Path Rel Dir
 dotGitDir = $(mkRelDir ".git")

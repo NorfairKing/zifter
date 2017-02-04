@@ -24,7 +24,7 @@ combineToInstructions cmd Flags {..} Configuration = pure (d, sets)
     d =
         case cmd of
             CommandRun -> DispatchRun
-            CommandInstall -> DispatchInstall
+            CommandInstall r -> DispatchInstall r
             CommandPreProcess -> DispatchPreProcess
             CommandCheck -> DispatchCheck
 
@@ -90,7 +90,8 @@ parseCommandCheck = info parser modifier
 parseCommandInstall :: ParserInfo Command
 parseCommandInstall = info parser modifier
   where
-    parser = pure CommandInstall
+    parser =
+        CommandInstall <$> doubleSwitch "recursive" "Install recursively" mempty
     modifier = fullDesc <> progDesc "Install the zift script."
 
 parseFlags :: Parser Flags

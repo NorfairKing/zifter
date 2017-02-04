@@ -6,7 +6,7 @@ type Instructions = (Dispatch, Settings)
 
 data Command
     = CommandRun
-    | CommandInstall
+    | CommandInstall Bool -- | Recursive?
     | CommandPreProcess
     | CommandCheck
     deriving (Show, Eq)
@@ -21,7 +21,7 @@ data Configuration =
 
 data Dispatch
     = DispatchRun
-    | DispatchInstall
+    | DispatchInstall Bool -- | recursive ?
     | DispatchPreProcess
     | DispatchCheck
     deriving (Show, Eq)
