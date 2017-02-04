@@ -51,6 +51,7 @@ run :: ZiftSetup -> Settings -> IO ()
 run ZiftSetup {..} =
     runWith $ \_ -> do
         runAsPreProcessor ziftPreprocessor
+        runAsPreCheck ziftPreCheck
         runAsChecker ziftChecker
 
 runPreProcessor :: ZiftSetup -> Settings -> IO ()
@@ -82,6 +83,12 @@ runAsPreProcessor func = do
     printZiftMessage "PREPROCESSOR STARTING"
     func
     printZiftMessage "PREPROCESSOR DONE"
+
+runAsPreCheck :: Zift () -> Zift ()
+runAsPreCheck func = do
+    printZiftMessage "PRECHECKER STARTING"
+    func
+    printZiftMessage "PRECHECKER DONE"
 
 runAsChecker :: Zift () -> Zift ()
 runAsChecker func = do

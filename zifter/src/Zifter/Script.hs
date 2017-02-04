@@ -1,7 +1,7 @@
 module Zifter.Script
     ( preprocessor
-    , checker
     , precheck
+    , checker
     , module Zifter.Script.Types
     ) where
 
@@ -13,10 +13,10 @@ preprocessor :: Zift () -> ZiftScript ()
 preprocessor prep =
     ZiftScript {renderZiftScript = pure ((), mempty {ziftPreprocessor = prep})}
 
+precheck :: Zift () -> ZiftScript ()
+precheck func =
+    ZiftScript {renderZiftScript = pure ((), mempty {ziftPreCheck = func})}
+
 checker :: Zift () -> ZiftScript ()
 checker ch =
     ZiftScript {renderZiftScript = pure ((), mempty {ziftChecker = ch})}
-
-precheck :: Zift () -> ZiftScript ()
-precheck func =
-    ZiftScript {renderZiftScript = pure ((), mempty {ziftPreCheckHook = func})}
