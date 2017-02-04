@@ -8,10 +8,11 @@ packages:
 - zifter-hlint
 - zifter-stack
 extra-deps:
-- genvalidity-hspec-0.3.0.0
 - genvalidity-0.3.0.0
-- validity-0.3.1.1
-- hlint-1.9.39
+- genvalidity-hspec-0.3.0.0
 - haskell-src-exts-1.19.1
+- hlint-1.9.39
+- optparse-applicative-0.13.0.0
+- validity-0.3.1.1
 flags: {}
 extra-package-dbs: []

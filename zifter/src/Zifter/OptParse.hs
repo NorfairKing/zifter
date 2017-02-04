@@ -45,6 +45,7 @@ runArgumentsParser = execParserPure pfs argParser
         { prefMultiSuffix = ""
         , prefDisambiguate = True
         , prefShowHelpOnError = True
+        , prefShowHelpOnEmpty = True
         , prefBacktrack = True
         , prefColumns = 80
         }
