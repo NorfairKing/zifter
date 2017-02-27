@@ -112,11 +112,12 @@ autoRootDir = do
     pure here
 
 install :: Bool -> Settings -> IO ()
-install recursive sets =
+install recursive sets = do
     if recursive
         then flip runWith sets $ \_ ->
                  recursively $ \ziftFile -> liftIO $ installIn $ parent ziftFile
-        else autoRootDir >>= installIn
+        else pure ()
+    autoRootDir >>= installIn
 
 installIn :: Path Abs Dir -> IO ()
 installIn rootdir = do
