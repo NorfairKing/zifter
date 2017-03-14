@@ -9,8 +9,6 @@
     --package zifter-hlint
     --package zifter-stack
 -}
-{-# LANGUAGE OverloadedStrings #-}
-
 import Zifter
 import Zifter.Cabal
 import Zifter.Git

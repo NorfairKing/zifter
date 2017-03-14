@@ -27,7 +27,6 @@ Lastly, it runs `hlint` on the entire project and then it runs `stack` to ensure
     --package zifter-hlint
     --package zifter-stack
 -}
-{-# LANGUAGE OverloadedStrings #-}
 
 import Zifter
 import Zifter.Cabal
