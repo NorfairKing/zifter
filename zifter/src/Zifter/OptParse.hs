@@ -2,7 +2,9 @@
 
 module Zifter.OptParse
     ( module Zifter.OptParse
-    , module Zifter.OptParse.Types
+    , Instructions
+    , Dispatch(..)
+    , Settings(..)
     ) where
 
 import Data.Monoid

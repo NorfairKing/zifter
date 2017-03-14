@@ -12,11 +12,15 @@ module Zifter
     , module Zifter.Script.Types
     ) where
 
-import Control.Concurrent (newMVar)
+import Control.Concurrent (newEmptyMVar, putMVar, tryTakeMVar)
+import Control.Concurrent.Async (async, wait)
+import Control.Concurrent.STM
+       (newTChanIO, tryReadTChan, readTChan, writeTChan, atomically)
 import Control.Monad
 import Path
 import Path.IO
 import Safe
+import System.Console.ANSI
 import qualified System.Directory as D
        (canonicalizePath, setPermissions, getPermissions,
         setOwnerExecutable)
@@ -24,7 +28,7 @@ import System.Environment (getProgName)
 import System.Exit (die)
 import qualified System.FilePath as FP (splitPath, joinPath)
 import System.IO
-       (hSetBuffering, BufferMode(NoBuffering), stderr, stdout)
+       (hSetBuffering, BufferMode(NoBuffering), stderr, stdout, hFlush)
 
 import Zifter.OptParse
 import Zifter.Recurse
@@ -64,19 +68,64 @@ runChecker ZiftSetup {..} = runWith $ \_ -> runAsChecker ziftChecker
 runWith :: (ZiftContext -> Zift ()) -> Settings -> IO ()
 runWith func sets = do
     rd <- autoRootDir
-    printvar <- newMVar ()
-    let ctx = ZiftContext rd sets printvar
-    withSystemTempDir "zifter" $ \d ->
-        withCurrentDir d $ do
-            r <-
-                flip zift ctx $ do
-                    printZiftMessage
-                        ("CHANGED WORKING DIRECTORY TO " ++ toFilePath d)
-                    func ctx
-                    printZiftMessage "ZIFTER DONE"
-            case r of
-                ZiftFailed err -> die err
-                ZiftSuccess () -> pure ()
+    pchan <- newTChanIO
+    fmvar <- newEmptyMVar
+    let ctx =
+            ZiftContext
+            { rootdir = rd
+            , settings = sets
+            , printChan = pchan
+            , recursionList = []
+            }
+    let runner =
+            withSystemTempDir "zifter" $ \d ->
+                withCurrentDir d $ do
+                    (r, zs) <-
+                        let zfunc = do
+                                printZiftMessage
+                                    ("CHANGED WORKING DIRECTORY TO " ++
+                                     toFilePath d)
+                                func ctx
+                                printZiftMessage "ZIFTER DONE"
+                        in zift zfunc ctx mempty
+                    case r of
+                        ZiftFailed err ->
+                            atomically $
+                            writeTChan pchan $
+                            ZiftOutput [SetColor Foreground Dull Red] err
+                        ZiftSuccess () -> pure ()
+                    void $ tryFlushZiftBuffer ctx zs
+                    putMVar fmvar ()
+    let outputOne :: ZiftOutput -> IO ()
+        outputOne (ZiftOutput commands str)
+                -- when False $ do
+         = do
+            let color = setsOutputColor sets
+            when color $ setSGR commands
+            putStr str
+            when color $ setSGR [Reset]
+            putStr "\n" -- Because otherwise it doesn't work?
+            hFlush stdout
+                -- print str
+    let outputAll = do
+            mout <- atomically $ tryReadTChan pchan
+            case mout of
+                Nothing -> pure ()
+                Just output -> do
+                    outputOne output
+                    outputAll
+    let printer = do
+            mdone <- tryTakeMVar fmvar
+            case mdone of
+                Just () -> outputAll
+                Nothing -> do
+                    output <- atomically $ readTChan pchan
+                    outputOne output
+                    printer
+    printerAsync <- async printer
+    runnerAsync <- async runner
+    wait runnerAsync
+    wait printerAsync
 
 runAsPreProcessor :: Zift () -> Zift ()
 runAsPreProcessor func = do

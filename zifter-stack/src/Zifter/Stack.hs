@@ -5,6 +5,7 @@ import Control.Monad.IO.Class
 import Path
 import Path.IO
 import System.Exit (ExitCode(..))
+import System.IO
 import System.Process
 
 import Distribution.Package
@@ -23,7 +24,12 @@ stackBuildZift = do
 stackCheckAndPrintVersion :: Zift ()
 stackCheckAndPrintVersion = do
     let cmd = "stack --version"
-    ec <- liftIO $ system cmd
+    (_, mouth, _, ph) <-
+        liftIO $ createProcess ((shell cmd) {std_out = CreatePipe})
+    ec <- liftIO $ waitForProcess ph
+    case mouth of
+        Nothing -> pure ()
+        Just outh -> liftIO (hGetContents outh) >>= printZift
     case ec of
         ExitFailure c -> fail $ unwords [cmd, "failed with exit code", show c]
         ExitSuccess -> pure ()
@@ -62,8 +68,7 @@ stackBuild = do
                         ((shell cleanCmd) {cwd = Just $ toFilePath rd})
                 waitForProcess ph
         case cec of
-            ExitFailure c -> do
-                printPreprocessingError $ unwords [cleanCmd, "failed."]
+            ExitFailure c ->
                 fail $ unwords [cleanCmd, "failed with exit code", show c]
             ExitSuccess -> pure ()
         forM_ targets $ \target -> do
@@ -75,8 +80,7 @@ stackBuild = do
                             ((shell buildCmd) {cwd = Just $ toFilePath rd})
                     waitForProcess bph
             case bec of
-                ExitFailure c -> do
-                    printPreprocessingError $ unwords [buildCmd, "failed."]
+                ExitFailure c ->
                     fail $ unwords [buildCmd, "failed with exit code", show c]
                 ExitSuccess ->
                     printPreprocessingDone $ unwords [buildCmd, "succeeded."]

@@ -7,7 +7,8 @@ import Path.IO
 import Safe
 import System.Exit (ExitCode(..))
 import qualified System.FilePath as FP (splitPath)
-import System.Process (shell, createProcess, waitForProcess)
+import System.IO
+import System.Process
 
 import Zifter.Zift
 
@@ -22,9 +23,12 @@ hindentZift = do
 hindentCheckAndPrintVersion :: Zift ()
 hindentCheckAndPrintVersion = do
     let cmd = "hindent --version"
-    ec <-
-        liftIO $
-        createProcess (shell cmd) >>= (waitForProcess . (\(_, _, _, ph) -> ph))
+    (_, mouth, _, ph) <-
+        liftIO $ createProcess ((shell cmd) {std_out = CreatePipe})
+    ec <- liftIO $ waitForProcess ph
+    case mouth of
+        Nothing -> pure ()
+        Just outh -> liftIO (hGetContents outh) >>= printZift
     case ec of
         ExitFailure c -> fail $ unwords [cmd, "failed with exit code", show c]
         ExitSuccess -> pure ()

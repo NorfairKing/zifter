@@ -1,4 +1,8 @@
+{-# LANGUAGE DeriveGeneric #-}
+
 module Zifter.OptParse.Types where
+
+import GHC.Generics
 
 type Arguments = (Command, Flags)
 
@@ -24,8 +28,8 @@ data Dispatch
     | DispatchInstall Bool -- | recursive ?
     | DispatchPreProcess
     | DispatchCheck
-    deriving (Show, Eq)
+    deriving (Show, Eq, Generic)
 
 newtype Settings = Settings
     { setsOutputColor :: Bool
-    } deriving (Show, Eq)
+    } deriving (Show, Eq, Generic)

@@ -3,6 +3,7 @@ module Zifter.Zift
     , getSettings
     , getSetting
     , ziftP
+    , printZift
     , printZiftMessage
     , printPreprocessingDone
     , printPreprocessingError
@@ -11,24 +12,24 @@ module Zifter.Zift
     , module Zifter.Zift.Types
     ) where
 
-import Control.Concurrent
-import Control.Monad
 import Control.Monad.IO.Class (liftIO)
 import Data.Foldable
 
 import System.Console.ANSI
-import System.IO
 
 import Path
 
 import Zifter.OptParse.Types
 import Zifter.Zift.Types
 
+getContext :: Zift ZiftContext
+getContext = Zift $ \zc st -> pure (ZiftSuccess zc, st)
+
 getRootDir :: Zift (Path Abs Dir)
-getRootDir = Zift $ \zc -> pure $ ZiftSuccess $ rootdir zc
+getRootDir = fmap rootdir getContext
 
 getSettings :: Zift Settings
-getSettings = Zift $ \zc -> pure $ ZiftSuccess $ settings zc
+getSettings = fmap settings getContext
 
 getSetting :: (Settings -> a) -> Zift a
 getSetting func = func <$> getSettings
@@ -36,8 +37,8 @@ getSetting func = func <$> getSettings
 ziftP :: [Zift ()] -> Zift ()
 ziftP = sequenceA_
 
-getPrintVar :: Zift (MVar ())
-getPrintVar = Zift $ \zc -> pure $ ZiftSuccess $ printvar zc
+printZift :: String -> Zift ()
+printZift = printWithColors []
 
 printZiftMessage :: String -> Zift ()
 printZiftMessage = printWithColors [SetColor Foreground Dull Blue]
@@ -49,13 +50,9 @@ printPreprocessingError :: String -> Zift ()
 printPreprocessingError = printWithColors [SetColor Foreground Dull Red]
 
 printWithColors :: [SGR] -> String -> Zift ()
-printWithColors commands str = do
-    color <- getSetting setsOutputColor
-    pv <- getPrintVar
-    liftIO $
-        withMVar pv $ \() -> do
-            when color $ setSGR commands
-            putStr str
-            when color $ setSGR [Reset]
-            putStr "\n" -- Because otherwise it doesn't work?
-            hFlush stdout
+printWithColors commands str =
+    Zift $ \_ st -> do
+        let st' =
+                ZiftState
+                {bufferedOutput = ZiftOutput commands str : bufferedOutput st}
+        pure (ZiftSuccess (), st')
