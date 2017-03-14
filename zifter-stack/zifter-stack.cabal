@@ -2,11 +2,14 @@ name: zifter-stack
 version: 0.0.0.0
 cabal-version: >=1.10
 build-type: Simple
-license: AllRightsReserved
+license: MIT
 license-file: LICENSE
-copyright: Copyright: (c) 2016 Tom Sydney Kerckhove
+copyright: Copyright: (c) 2017 Tom Sydney Kerckhove
 maintainer: syd.kerckhove@gmail.com
 homepage: http://cs-syd.eu
+synopsis: zifter-stack
+description:
+    zifter-stack
 category: Zift
 author: Tom Sydney Kerckhove
 
