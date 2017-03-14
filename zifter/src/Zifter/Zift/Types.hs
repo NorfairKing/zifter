@@ -70,10 +70,6 @@ instance Applicative Zift where
         Zift $ \zc st -> do
             let zc1 = zc {recursionList = L : recursionList zc}
                 zc2 = zc {recursionList = R : recursionList zc}
-            -- faa <- async $ faf zc1 st
-            -- aa <- async $ af zc2 st
-            -- (fa, zs1) <- wait faa
-            -- (a, zs2) <- wait aa
             ((fa, zs1), (a, zs2)) <-
                 concurrently (faf zc1 mempty) (af zc2 mempty)
             let st' = st `mappend` zs1 `mappend` zs2

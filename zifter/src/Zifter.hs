@@ -25,7 +25,7 @@ import qualified System.Directory as D
        (canonicalizePath, setPermissions, getPermissions,
         setOwnerExecutable)
 import System.Environment (getProgName)
-import System.Exit (die)
+import System.Exit
 import qualified System.FilePath as FP (splitPath, joinPath)
 import System.IO
        (hSetBuffering, BufferMode(NoBuffering), stderr, stdout, hFlush)
@@ -88,14 +88,19 @@ runWith func sets = do
                                 func ctx
                                 printZiftMessage "ZIFTER DONE"
                         in zift zfunc ctx mempty
-                    case r of
-                        ZiftFailed err ->
-                            atomically $
-                            writeTChan pchan $
-                            ZiftOutput [SetColor Foreground Dull Red] err
-                        ZiftSuccess () -> pure ()
+                    result <-
+                        case r of
+                            ZiftFailed err -> do
+                                atomically $
+                                    writeTChan pchan $
+                                    ZiftOutput
+                                        [SetColor Foreground Dull Red]
+                                        err
+                                pure $ ExitFailure 1
+                            ZiftSuccess () -> pure ExitSuccess
                     void $ tryFlushZiftBuffer ctx zs
                     putMVar fmvar ()
+                    pure result
     let outputOne :: ZiftOutput -> IO ()
         outputOne (ZiftOutput commands str)
                 -- when False $ do
@@ -124,8 +129,9 @@ runWith func sets = do
                     printer
     printerAsync <- async printer
     runnerAsync <- async runner
-    wait runnerAsync
+    result <- wait runnerAsync
     wait printerAsync
+    exitWith result
 
 runAsPreProcessor :: Zift () -> Zift ()
 runAsPreProcessor func = do
