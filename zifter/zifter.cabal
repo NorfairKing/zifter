@@ -51,7 +51,7 @@ test-suite zifter-test
     build-depends:
         base >=4.9 && <=5,
         zifter -any,
-        QuickCheck >=2.8 && <2.9,
+        QuickCheck >=2.9 && <2.10,
         genvalidity >=0.3 && <0.4,
         genvalidity-hspec >=0.3 && <0.4,
         hspec -any,
