@@ -2,6 +2,7 @@ module Zifter.Stack where
 
 import Control.Monad
 import Control.Monad.IO.Class
+import Data.List (isInfixOf)
 import Path
 import Path.IO
 import System.Exit (ExitCode(..))
@@ -38,7 +39,9 @@ stackGetPackageTargetTuples :: Zift [(String, [String])]
 stackGetPackageTargetTuples = do
     rd <- getRootDir
     (_, fs) <- liftIO $ listDirRecur rd
-    let cabalFiles = filter ((== ".cabal") . fileExtension) fs
+    let cabalFiles =
+            filter (not . isInfixOf ".stack-work" . toFilePath) $
+            filter ((== ".cabal") . fileExtension) fs
     (concat <$>) $
         forM cabalFiles $ \cabalFile -> do
             pd <-
