@@ -61,21 +61,9 @@ stackGetPackageTargetTuples = do
 stackBuild :: Zift ()
 stackBuild = do
     rd <- getRootDir
-    tups <- stackGetPackageTargetTuples
-    forM_ tups $ \(package_, targets) -> do
-        let cleanCmd = "stack clean " ++ package_
-        cec <-
-            liftIO $ do
-                (_, _, _, ph) <-
-                    createProcess
-                        ((shell cleanCmd) {cwd = Just $ toFilePath rd})
-                waitForProcess ph
-        case cec of
-            ExitFailure c ->
-                fail $ unwords [cleanCmd, "failed with exit code", show c]
-            ExitSuccess -> pure ()
-        forM_ targets $ \target -> do
-            let buildCmd = "stack build --pedantic --haddock --test " ++ target
+    let stack :: String -> Zift ()
+        stack args = do
+            let buildCmd = unwords ["stack", args]
             bec <-
                 liftIO $ do
                     (_, _, _, bph) <-
@@ -87,3 +75,9 @@ stackBuild = do
                     fail $ unwords [buildCmd, "failed with exit code", show c]
                 ExitSuccess ->
                     printPreprocessingDone $ unwords [buildCmd, "succeeded."]
+    tups <- stackGetPackageTargetTuples
+    stack "build"
+    forM_ tups $ \(package_, targets) -> do
+        stack $ unwords ["clean", package_]
+        forM_ targets $ \target ->
+            stack $ unwords ["build --pedantic --haddock --test", target]
