@@ -44,14 +44,11 @@ instance GenUnchecked ZiftOutput
 
 instance GenUnchecked ZiftState
 
-instance GenUnchecked a =>
-         GenUnchecked (ZiftResult a) where
+instance GenUnchecked a => GenUnchecked (ZiftResult a) where
     genUnchecked = ZiftSuccess <$> genUnchecked
 
-instance GenValid a =>
-         GenValid (ZiftResult a) where
+instance GenValid a => GenValid (ZiftResult a) where
     genValid = ZiftSuccess <$> genValid
 
-instance GenInvalid a =>
-         GenInvalid (ZiftResult a) where
+instance GenInvalid a => GenInvalid (ZiftResult a) where
     genInvalid = ZiftSuccess <$> genInvalid
