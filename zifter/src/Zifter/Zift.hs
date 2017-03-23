@@ -8,6 +8,7 @@ module Zifter.Zift
     , printPreprocessingDone
     , printPreprocessingError
     , printWithColors
+    , addZiftOutput
     , liftIO
     , module Zifter.Zift.Types
     ) where
@@ -50,9 +51,10 @@ printPreprocessingError :: String -> Zift ()
 printPreprocessingError = printWithColors [SetColor Foreground Dull Red]
 
 printWithColors :: [SGR] -> String -> Zift ()
-printWithColors commands str =
+printWithColors commands str = addZiftOutput $ ZiftOutput commands str
+
+addZiftOutput :: ZiftOutput -> Zift ()
+addZiftOutput zo =
     Zift $ \_ st -> do
-        let st' =
-                ZiftState
-                {bufferedOutput = ZiftOutput commands str : bufferedOutput st}
+        let st' = ZiftState {bufferedOutput = zo : bufferedOutput st}
         pure (ZiftSuccess (), st')

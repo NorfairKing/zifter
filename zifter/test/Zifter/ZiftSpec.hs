@@ -1,4 +1,5 @@
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 module Zifter.ZiftSpec
     ( spec
@@ -13,6 +14,7 @@ import Path.IO
 import Control.Concurrent (threadDelay)
 import Control.Concurrent.STM
 import Data.Foldable
+import Data.GenValidity.Path ()
 
 import Zifter.OptParse.Gen ()
 import Zifter.OptParse.Types
@@ -177,23 +179,14 @@ spec = do
                     forAll genUnchecked $ \ls ->
                         forAll genUnchecked $ \rl ->
                             forAll genUnchecked $ \sets -> do
-                                let zf = for_ ls printZiftMessage
-                                let zf' =
-                                        zf
-                                        { zift =
-                                              \zc zs ->
-                                                  zift
-                                                      zf
-                                                      (zc {recursionList = rl})
-                                                      zs
-                                        }
+                                let zf =
+                                        withRecursionList rl $
+                                        for_ ls addZiftOutput
                                 pchan <- atomically newTChan
-                                (zr, zs) <- runZiftTestWithChan pchan sets zf'
+                                (zr, zs) <- runZiftTestWithChan pchan sets zf
                                 zr `shouldBe` ZiftSuccess ()
                                 buffer <- readAllFrom pchan
-                                map
-                                    outputMessage
-                                    (buffer ++ reverse (bufferedOutput zs)) `shouldBe`
+                                (buffer ++ reverse (bufferedOutput zs)) `shouldBe`
                                     ls
         describe "Monad Zift" $
             describe ">>=" $ do
@@ -287,24 +280,29 @@ spec = do
                     forAll genUnchecked $ \ls ->
                         forAll genUnchecked $ \rl ->
                             forAll genUnchecked $ \sets -> do
-                                let zf = forM_ ls printZiftMessage
-                                    zf' =
-                                        zf
-                                        { zift =
-                                              \zc zs ->
-                                                  zift
-                                                      zf
-                                                      (zc {recursionList = rl})
-                                                      zs
-                                        }
+                                let zf = forM_ ls addZiftOutput
+                                    zf' = withRecursionList rl zf
                                 pchan <- atomically newTChan
                                 (zr, zs) <- runZiftTestWithChan pchan sets zf'
                                 zr `shouldBe` ZiftSuccess ()
                                 buffer <- readAllFrom pchan
-                                map
-                                    outputMessage
-                                    (buffer ++ reverse (bufferedOutput zs)) `shouldBe`
+                                (buffer ++ reverse (bufferedOutput zs)) `shouldBe`
                                     ls
+                it "Orders the messages in this do-notation correctly" $
+                    forAll genUnchecked $ \(m1, m2, m3) ->
+                        forAll genUnchecked $ \rl ->
+                            forAll genUnchecked $ \sets -> do
+                                let zf =
+                                        withRecursionList rl $ do
+                                            addZiftOutput m1
+                                            addZiftOutput m2
+                                            addZiftOutput m3
+                                pchan <- atomically newTChan
+                                (zr, zs) <- runZiftTestWithChan pchan sets zf
+                                zr `shouldBe` ZiftSuccess ()
+                                buffer <- readAllFrom pchan
+                                (buffer ++ reverse (bufferedOutput zs)) `shouldBe`
+                                    [m1, m2, m3]
         describe "MonadFail Zift" $ do
             describe "fail" $
                 it "just results in a ZiftFailed" $
@@ -324,6 +322,37 @@ spec = do
                         (zr, zs) <- runZiftTestWithState state sets zf
                         zr `shouldBe` ZiftFailed ("user error (" ++ s ++ ")")
                         zs `shouldBe` state
+        describe "tryFlushZiftBuffer" $ do
+            it "does not do anything if there recursion list is not empty" $
+                forAll genUnchecked $ \state ->
+                    forAllCtx $ \ctx ->
+                        if null $ recursionList ctx
+                            then pure () -- Not testing this part now.
+                            else do
+                                state' <- tryFlushZiftBuffer ctx state
+                                state' `shouldBe` state
+            it
+                "flushes the entire buffer in the correct order, if the recursion list is empty" $
+                forAll genUnchecked $ \state ->
+                    forAllCtx $ \ctx -> do
+                        state' <-
+                            tryFlushZiftBuffer ctx {recursionList = []} state
+                        state' `shouldBe` state {bufferedOutput = []}
+                        res <- readAllFrom $ printChan ctx
+                        res `shouldBe` reverse (bufferedOutput state)
+
+forAllCtx :: Testable (IO b) => (ZiftContext -> IO b) -> Property
+forAllCtx func =
+    forAll genUnchecked $ \(rd, sets, rl) -> do
+        pchan <- atomically newTChan
+        let zc =
+                ZiftContext
+                { rootdir = rd
+                , settings = sets
+                , printChan = pchan
+                , recursionList = rl
+                }
+        func zc
 
 runZiftTest :: Settings -> Zift a -> IO (ZiftResult a, ZiftState)
 runZiftTest sets func = do
@@ -365,3 +394,7 @@ readAllFrom chan = do
         Just r -> do
             rest <- readAllFrom chan
             pure (r : rest)
+
+withRecursionList :: [LR] -> Zift a -> Zift a
+withRecursionList rl zf =
+    zf {zift = \zc zs -> zift zf (zc {recursionList = rl}) zs}

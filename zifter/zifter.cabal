@@ -54,6 +54,7 @@ test-suite zifter-test
         QuickCheck >=2.9 && <2.10,
         genvalidity >=0.3 && <0.4,
         genvalidity-hspec >=0.3 && <0.4,
+        genvalidity-path >=0.1 && <0.2,
         hspec -any,
         path -any,
         path-io -any,
