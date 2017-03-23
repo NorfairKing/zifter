@@ -64,12 +64,21 @@ stackBuild = do
     let stack :: String -> Zift ()
         stack args = do
             let buildCmd = unwords ["stack", args]
-            bec <-
-                liftIO $ do
-                    (_, _, _, bph) <-
-                        createProcess
-                            ((shell buildCmd) {cwd = Just $ toFilePath rd})
-                    waitForProcess bph
+            (_, mouth, merrh, bph) <-
+                liftIO $
+                createProcess
+                    ((shell buildCmd)
+                     { cwd = Just $ toFilePath rd
+                     , std_out = CreatePipe
+                     , std_err = CreatePipe
+                     })
+            bec <- liftIO $ waitForProcess bph
+            case mouth of
+                Nothing -> pure ()
+                Just outh -> liftIO (hGetContents outh) >>= printZift
+            case merrh of
+                Nothing -> pure ()
+                Just errh -> liftIO (hGetContents errh) >>= printZift
             case bec of
                 ExitFailure c ->
                     fail $ unwords [buildCmd, "failed with exit code", show c]

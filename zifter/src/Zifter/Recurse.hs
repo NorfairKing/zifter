@@ -10,6 +10,7 @@ import Control.Monad.IO.Class
 import Path
 import Path.IO
 import System.Exit
+import System.IO
 import System.Process
 
 import Zifter.Script
@@ -51,13 +52,27 @@ runZiftScript scriptPath command = do
             , toFilePath rd
             ]
     let cmd = unwords [toFilePath scriptPath, command]
-    let cp = (shell cmd) {cwd = Just $ toFilePath $ parent scriptPath}
-    ec <-
-        liftIO $ do
-            (_, _, _, ph) <- createProcess cp
-            waitForProcess ph
+    let cp =
+            (shell cmd)
+            {cwd = Just $ toFilePath $ parent scriptPath, std_out = CreatePipe}
+    (_, mouth, merrh, ph) <- liftIO $ createProcess cp
+    ec <- liftIO $ waitForProcess ph
+    case mouth of
+        Nothing -> pure ()
+        Just outh -> liftIO (hGetContents outh) >>= printZift
+    case merrh of
+        Nothing -> pure ()
+        Just errh -> liftIO (hGetContents errh) >>= printZift
     case ec of
-        ExitSuccess -> pure ()
+        ExitSuccess ->
+            printZiftMessage $
+            unwords
+                [ "ZIFTING"
+                , toFilePath scriptPath
+                , "AS PART OF RECURSIVE ZIFT FROM"
+                , toFilePath rd
+                , "DONE"
+                ]
         ExitFailure c -> do
             printPreprocessingError "RECURSIVE ZIFT FAILED"
             fail $
