@@ -17,25 +17,39 @@ import Zifter.Zift
 
 recursiveZift :: ZiftScript ()
 recursiveZift = do
-    preprocessor $
+    preprocessor $ do
+        rd <- getRootDir
+        printZiftMessage $
+            unwords ["RECURSIVE PREPROCESSING STARTING FROM", toFilePath rd]
         recursively $ \ziftFile -> runZiftScript ziftFile "preprocess"
-    checker $ recursively $ \ziftFile -> runZiftScript ziftFile "check"
+        printZiftMessage $
+            unwords ["RECURSIVE PREPROCESSING FROM", toFilePath rd, "DONE."]
+    checker $ do
+        rd <- getRootDir
+        printZiftMessage $
+            unwords ["RECURSIVE CHECKING STARTING FROM", toFilePath rd]
+        recursively $ \ziftFile -> runZiftScript ziftFile "check"
+        printZiftMessage $
+            unwords ["RECURSIVE CHECKING FROM", toFilePath rd, "DONE"]
 
 recursively :: (Path Abs File -> Zift ()) -> Zift ()
 recursively func = do
     fs <- findZiftFilesRecursively
-    rd <- getRootDir
-    printPreprocessingDone $
-        unwords ["RECURSIVE ZIFT STARTING AT", toFilePath rd]
     -- Do it in serial (for errors to show up nicely)
     -- TODO make it possible to run them in parallel instead?
     --      we might have to make it possible for zift to output something machine-readible instead.
     forM_ fs func
-    printPreprocessingDone $ unwords ["RECURSIVE ZIFT DONE AT", toFilePath rd]
 
 runZiftScript :: Path Abs File -> String -> Zift ()
 runZiftScript scriptPath command = do
-    printZiftMessage $ unwords ["ZIFTING", toFilePath scriptPath, "RECURSIVELY"]
+    rd <- getRootDir
+    printZiftMessage $
+        unwords
+            [ "ZIFTING"
+            , toFilePath scriptPath
+            , "AS PART OF RECURSIVE ZIFT FROM"
+            , toFilePath rd
+            ]
     let cmd = unwords [toFilePath scriptPath, command]
     let cp = (shell cmd) {cwd = Just $ toFilePath $ parent scriptPath}
     ec <-
@@ -48,10 +62,11 @@ runZiftScript scriptPath command = do
             printPreprocessingError "RECURSIVE ZIFT FAILED"
             fail $
                 unwords
-                    [ cmd
+                    [ show cmd
                     , "failed with exit code"
                     , show c
-                    , "while recursively zifting."
+                    , "while recursively zifting with"
+                    , toFilePath scriptPath
                     ]
 
 findZiftFilesRecursively :: Zift [Path Abs File]

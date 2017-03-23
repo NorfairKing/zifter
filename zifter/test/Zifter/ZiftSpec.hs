@@ -10,12 +10,16 @@ import Test.Validity
 
 import Path.IO
 
+import Control.Concurrent (threadDelay)
 import Control.Concurrent.STM
+import Data.Foldable
 
 import Zifter.OptParse.Gen ()
 import Zifter.OptParse.Types
 import Zifter.Zift
 import Zifter.Zift.Gen ()
+
+{-# ANN module "HLint: ignore Reduce duplication" #-}
 
 spec :: Spec
 spec = do
@@ -25,6 +29,7 @@ spec = do
         genValiditySpec @(ZiftResult Double)
         functorSpec @ZiftResult
         applicativeSpec @ZiftResult
+        monoidSpec @(ZiftResult String)
         monadSpec @ZiftResult
     describe "Zift" $ do
         describe "Monoid Zift" $ do
@@ -81,64 +86,225 @@ spec = do
                         (zr, zs) <- runZiftTestWithState state sets zf
                         zr `shouldBe` ZiftSuccess ()
                         zs `shouldBe` state
-            describe "<*>" $
-                it "succeeds with a linear flushed buffer" $
-                forAll genUnchecked $ \sets ->
-                    forAll genUnchecked $ \state ->
-                        forAll genUnchecked $ \st1 ->
-                            forAll genUnchecked $ \st2 -> do
-                                let zf1 =
-                                        Zift $ \_ st ->
-                                            pure
-                                                ( ZiftSuccess (+ 1)
-                                                , st `mappend` st1)
-                                let zf2 =
-                                        Zift $ \_ st ->
-                                            pure
-                                                ( ZiftSuccess (1 :: Int)
-                                                , st `mappend` st2)
-                                let zf = zf1 <*> zf2
+            describe "<*>" $ do
+                it
+                    "succeeds with a linear flushed buffer if used at the top-level" $
+                    forAll genUnchecked $ \sets ->
+                        forAll genUnchecked $ \state ->
+                            forAll genUnchecked $ \st1 ->
+                                forAll genUnchecked $ \st2 -> do
+                                    let zf1 =
+                                            Zift $ \_ st ->
+                                                pure
+                                                    ( ZiftSuccess (+ 1)
+                                                    , st `mappend` st1)
+                                    let zf2 =
+                                            Zift $ \_ st ->
+                                                pure
+                                                    ( ZiftSuccess (1 :: Int)
+                                                    , st `mappend` st2)
+                                    let zf = zf1 <*> zf2
+                                    pchan <- atomically newTChan
+                                    (zr, zs) <-
+                                        runZiftTestWith state pchan sets zf
+                                    zr `shouldBe` ZiftSuccess 2
+                                    zs `shouldBe`
+                                        ZiftState {bufferedOutput = []}
+                                    buffer <- readAllFrom pchan
+                                    buffer `shouldBe`
+                                        reverse
+                                            (bufferedOutput st2 ++
+                                             bufferedOutput st1 ++
+                                             bufferedOutput state)
+                it "fails immediately if the first of the two actions failed" $
+                    forAll genUnchecked $ \sets ->
+                        forAll genUnchecked $ \state ->
+                            forAll genUnchecked $ \st1 ->
+                                forAll genUnchecked $ \failedMessage -> do
+                                    let zf1 =
+                                            Zift $ \_ st ->
+                                                pure
+                                                    ( ZiftFailed failedMessage :: ZiftResult (Int -> String)
+                                                    , st `mappend` st1)
+                                    let zf2 = do
+                                            liftIO $
+                                                threadDelay $ 5 * 1000 * 1000
+                                            pure 1 :: Zift Int
+                                    let zf = zf1 <*> zf2
+                                    pchan <- atomically newTChan
+                                    (zr, zs) <-
+                                        runZiftTestWith state pchan sets zf
+                                    zr `shouldBe`
+                                        (ZiftFailed failedMessage :: ZiftResult String)
+                                    zs `shouldBe`
+                                        ZiftState
+                                        { bufferedOutput =
+                                              bufferedOutput st1 ++
+                                              bufferedOutput state
+                                        }
+                                    buffer <- readAllFrom pchan
+                                    buffer `shouldBe` []
+                it "fails immediately if the second of the two actions failed" $
+                    forAll genUnchecked $ \sets ->
+                        forAll genUnchecked $ \state ->
+                            forAll genUnchecked $ \st2 ->
+                                forAll genUnchecked $ \failedMessage -> do
+                                    let zf1 = do
+                                            liftIO $
+                                                threadDelay $ 5 * 1000 * 1000
+                                            pure show :: Zift (Int -> String)
+                                    let zf2 =
+                                            Zift $ \_ st ->
+                                                pure
+                                                    ( ZiftFailed failedMessage :: ZiftResult Int
+                                                    , st `mappend` st2)
+                                    let zf = zf1 <*> zf2
+                                    pchan <- atomically newTChan
+                                    (zr, zs) <-
+                                        runZiftTestWith state pchan sets zf
+                                    zr `shouldBe`
+                                        (ZiftFailed failedMessage :: ZiftResult String)
+                                    zs `shouldBe`
+                                        ZiftState
+                                        { bufferedOutput =
+                                              bufferedOutput st2 ++
+                                              bufferedOutput state
+                                        }
+                                    buffer <- readAllFrom pchan
+                                    buffer `shouldBe` []
+                it
+                    "Orders the messages correctly when they are printed in a for_ loop" $
+                    forAll genUnchecked $ \ls ->
+                        forAll genUnchecked $ \rl ->
+                            forAll genUnchecked $ \sets -> do
+                                let zf = for_ ls printZiftMessage
+                                let zf' =
+                                        zf
+                                        { zift =
+                                              \zc zs ->
+                                                  zift
+                                                      zf
+                                                      (zc {recursionList = rl})
+                                                      zs
+                                        }
                                 pchan <- atomically newTChan
-                                (zr, zs) <- runZiftTestWith state pchan sets zf
-                                zr `shouldBe` ZiftSuccess 2
-                                zs `shouldBe` ZiftState {bufferedOutput = []}
+                                (zr, zs) <- runZiftTestWithChan pchan sets zf'
+                                zr `shouldBe` ZiftSuccess ()
                                 buffer <- readAllFrom pchan
-                                buffer `shouldBe`
-                                    reverse
-                                        (bufferedOutput st2 ++
-                                         bufferedOutput st1 ++
-                                         bufferedOutput state)
+                                map
+                                    outputMessage
+                                    (buffer ++ reverse (bufferedOutput zs)) `shouldBe`
+                                    ls
         describe "Monad Zift" $
-            describe ">>=" $
-            it "succeeds with a flushed buffer after the first output" $
-            forAll genUnchecked $ \sets ->
-                forAll genUnchecked $ \state ->
-                    forAll genUnchecked $ \zo1 ->
-                        forAll genUnchecked $ \zo2 -> do
-                            let zf1 =
-                                    Zift $ \_ st ->
-                                        pure
-                                            ( ZiftSuccess (2 :: Int)
-                                            , st
-                                              { bufferedOutput =
-                                                    zo1 : bufferedOutput st
-                                              })
-                            let zf2 n =
-                                    Zift $ \_ st ->
-                                        pure
-                                            ( ZiftSuccess (n + 1)
-                                            , st
-                                              { bufferedOutput =
-                                                    zo2 : bufferedOutput st
-                                              })
-                            let zf = zf1 >>= zf2
-                            pchan <- atomically newTChan
-                            (zr, zs) <- runZiftTestWith state pchan sets zf
-                            zr `shouldBe` ZiftSuccess 3
-                            zs `shouldBe` ZiftState {bufferedOutput = [zo2]}
-                            buffer <- readAllFrom pchan
-                            buffer `shouldBe`
-                                (reverse (bufferedOutput state) ++ [zo1])
+            describe ">>=" $ do
+                it "succeeds with a flushed buffer after the first output" $
+                    forAll genUnchecked $ \sets ->
+                        forAll genUnchecked $ \state ->
+                            forAll genUnchecked $ \st1 ->
+                                forAll genUnchecked $ \st2 -> do
+                                    let zf1 =
+                                            Zift $ \_ st ->
+                                                pure
+                                                    ( ZiftSuccess (2 :: Int)
+                                                    , st `mappend` st1)
+                                    let zf2 n =
+                                            Zift $ \_ st ->
+                                                pure
+                                                    ( ZiftSuccess (n + 1)
+                                                    , st `mappend` st2)
+                                    let zf = zf1 >>= zf2
+                                    pchan <- atomically newTChan
+                                    (zr, zs) <-
+                                        runZiftTestWith state pchan sets zf
+                                    zr `shouldBe` ZiftSuccess 3
+                                    zs `shouldBe` st2
+                                    buffer <- readAllFrom pchan
+                                    buffer `shouldBe`
+                                        reverse
+                                            (bufferedOutput st1 ++
+                                             bufferedOutput state)
+                it "fails if the first part failed" $
+                    forAll genUnchecked $ \sets ->
+                        forAll genUnchecked $ \state ->
+                            forAll genUnchecked $ \st1 ->
+                                forAll genUnchecked $ \st2 ->
+                                    forAll genUnchecked $ \failMsg -> do
+                                        let zf1 =
+                                                Zift $ \_ st ->
+                                                    pure
+                                                        ( ZiftFailed failMsg :: ZiftResult Int
+                                                        , st `mappend` st1)
+                                        let zf2 n =
+                                                Zift $ \_ st ->
+                                                    pure
+                                                        ( ZiftSuccess (n + 1)
+                                                        , st `mappend` st2)
+                                        let zf = zf1 >>= zf2
+                                        pchan <- atomically newTChan
+                                        (zr, zs) <-
+                                            runZiftTestWith state pchan sets zf
+                                        zr `shouldBe` ZiftFailed failMsg
+                                        zs `shouldBe` mempty
+                                        buffer <- readAllFrom pchan
+                                        buffer `shouldBe`
+                                            reverse
+                                                (bufferedOutput st1 ++
+                                                 bufferedOutput state)
+                it "fails if the second part failed" $
+                    forAll genUnchecked $ \sets ->
+                        forAll genUnchecked $ \state ->
+                            forAll genUnchecked $ \st1 ->
+                                forAll genUnchecked $ \st2 ->
+                                    forAll genUnchecked $ \failMsg -> do
+                                        let zf1 =
+                                                Zift $ \_ st ->
+                                                    pure
+                                                        ( ZiftSuccess (1 :: Int)
+                                                        , st `mappend` st1)
+                                        let zf2 _ =
+                                                Zift $ \_ st ->
+                                                    pure
+                                                        ( ZiftFailed failMsg :: ZiftResult (Int -> Int)
+                                                        , st `mappend` st2)
+                                        let zf = zf1 >>= zf2
+                                        pchan <- atomically newTChan
+                                        (zr, zs) <-
+                                            runZiftTestWith state pchan sets zf
+                                        case zr of
+                                            ZiftSuccess _ ->
+                                                expectationFailure
+                                                    "should have failed."
+                                            ZiftFailed msg -> do
+                                                msg `shouldBe` failMsg
+                                                zs `shouldBe` st2
+                                                buffer <- readAllFrom pchan
+                                                buffer `shouldBe`
+                                                    reverse
+                                                        (bufferedOutput st1 ++
+                                                         bufferedOutput state)
+                it
+                    "Orders the messages correctly when they are printed in a forM_ loop at any depth" $
+                    forAll genUnchecked $ \ls ->
+                        forAll genUnchecked $ \rl ->
+                            forAll genUnchecked $ \sets -> do
+                                let zf = forM_ ls printZiftMessage
+                                    zf' =
+                                        zf
+                                        { zift =
+                                              \zc zs ->
+                                                  zift
+                                                      zf
+                                                      (zc {recursionList = rl})
+                                                      zs
+                                        }
+                                pchan <- atomically newTChan
+                                (zr, zs) <- runZiftTestWithChan pchan sets zf'
+                                zr `shouldBe` ZiftSuccess ()
+                                buffer <- readAllFrom pchan
+                                map
+                                    outputMessage
+                                    (buffer ++ reverse (bufferedOutput zs)) `shouldBe`
+                                    ls
         describe "MonadFail Zift" $ do
             describe "fail" $
                 it "just results in a ZiftFailed" $

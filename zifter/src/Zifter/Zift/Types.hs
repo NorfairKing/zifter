@@ -4,7 +4,7 @@ module Zifter.Zift.Types where
 
 import Prelude
 
-import Control.Concurrent.Async (concurrently)
+import Control.Concurrent.Async (waitEither, wait, cancel, async)
 import Control.Concurrent.STM (TChan, writeTChan, atomically)
 import Control.Exception (SomeException, displayException, catch)
 import Control.Monad.Catch (MonadThrow(..))
@@ -18,10 +18,10 @@ import System.Console.ANSI (SGR)
 
 import Zifter.OptParse.Types
 
-data ZiftOutput =
-    ZiftOutput [SGR]
-               String
-    deriving (Show, Eq, Generic)
+data ZiftOutput = ZiftOutput
+    { outputColors :: [SGR]
+    , outputMessage :: String
+    } deriving (Show, Eq, Generic)
 
 data ZiftContext = ZiftContext
     { rootdir :: Path Abs Dir
@@ -69,11 +69,30 @@ instance Applicative Zift where
         Zift $ \zc st -> do
             let zc1 = zc {recursionList = L : recursionList zc}
                 zc2 = zc {recursionList = R : recursionList zc}
-            ((fa, zs1), (a, zs2)) <-
-                concurrently (faf zc1 mempty) (af zc2 mempty)
-            let st' = st `mappend` zs1 `mappend` zs2
-            st'' <- tryFlushZiftBuffer zc st'
-            pure (fa <*> a, st'')
+            afaf <- async (faf zc1 mempty)
+            aaf <- async (af zc2 mempty)
+            efaa <- waitEither afaf aaf
+            let complete (fa, zs1) (a, zs2) = do
+                    let st' = st `mappend` zs1 `mappend` zs2
+                    st'' <- tryFlushZiftBuffer zc st'
+                    pure (fa <*> a, st'')
+            case efaa of
+                Left t1@(far, zs1) ->
+                    case far of
+                        ZiftFailed s -> do
+                            cancel aaf
+                            pure (ZiftFailed s, st `mappend` zs1)
+                        _ -> do
+                            t2 <- wait aaf
+                            complete t1 t2
+                Right t2@(ar, zs2) ->
+                    case ar of
+                        ZiftFailed s -> do
+                            cancel afaf
+                            pure (ZiftFailed s, st `mappend` zs2)
+                        _ -> do
+                            t1 <- wait afaf
+                            complete t1 t2
 
 instance Monad Zift where
     (Zift fa) >>= mb =

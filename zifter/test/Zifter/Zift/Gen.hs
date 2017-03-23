@@ -40,6 +40,8 @@ deriving instance Generic SGR
 
 instance GenUnchecked SGR
 
+instance GenUnchecked LR
+
 instance GenUnchecked ZiftOutput
 
 instance GenUnchecked ZiftState
