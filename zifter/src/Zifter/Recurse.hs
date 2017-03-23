@@ -20,17 +20,17 @@ recursiveZift :: ZiftScript ()
 recursiveZift = do
     preprocessor $ do
         rd <- getRootDir
-        printZiftMessage $
+        printRecursionMsg $
             unwords ["RECURSIVE PREPROCESSING STARTING FROM", toFilePath rd]
         recursively $ \ziftFile -> runZiftScript ziftFile "preprocess"
-        printZiftMessage $
+        printRecursionMsg $
             unwords ["RECURSIVE PREPROCESSING FROM", toFilePath rd, "DONE."]
     checker $ do
         rd <- getRootDir
-        printZiftMessage $
+        printRecursionMsg $
             unwords ["RECURSIVE CHECKING STARTING FROM", toFilePath rd]
         recursively $ \ziftFile -> runZiftScript ziftFile "check"
-        printZiftMessage $
+        printRecursionMsg $
             unwords ["RECURSIVE CHECKING FROM", toFilePath rd, "DONE"]
 
 recursively :: (Path Abs File -> Zift ()) -> Zift ()
@@ -41,10 +41,19 @@ recursively func = do
     --      we might have to make it possible for zift to output something machine-readible instead.
     forM_ fs func
 
+halfIndent :: String -> String
+halfIndent = ("  " ++)
+
+indent :: String -> String
+indent = halfIndent . ("| " ++)
+
+printRecursionMsg :: String -> Zift ()
+printRecursionMsg = printZiftMessage . halfIndent
+
 runZiftScript :: Path Abs File -> String -> Zift ()
 runZiftScript scriptPath command = do
     rd <- getRootDir
-    printZiftMessage $
+    printRecursionMsg $
         unwords
             [ "ZIFTING"
             , toFilePath scriptPath
@@ -59,13 +68,15 @@ runZiftScript scriptPath command = do
     ec <- liftIO $ waitForProcess ph
     case mouth of
         Nothing -> pure ()
-        Just outh -> liftIO (hGetContents outh) >>= printZift
+        Just outh -> do
+            cts <- liftIO (hGetContents outh)
+            forM_ (lines cts) $ printZift . indent
     case merrh of
         Nothing -> pure ()
         Just errh -> liftIO (hGetContents errh) >>= printZift
     case ec of
         ExitSuccess ->
-            printZiftMessage $
+            printRecursionMsg $
             unwords
                 [ "ZIFTING"
                 , toFilePath scriptPath
@@ -74,7 +85,7 @@ runZiftScript scriptPath command = do
                 , "DONE"
                 ]
         ExitFailure c -> do
-            printPreprocessingError "RECURSIVE ZIFT FAILED"
+            printPreprocessingError $ halfIndent "RECURSIVE ZIFT FAILED"
             fail $
                 unwords
                     [ show cmd
