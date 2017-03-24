@@ -98,7 +98,11 @@ instance Applicative Zift where
 instance Monad Zift where
     (Zift fa) >>= mb =
         Zift $ \rd st -> do
-            (ra, st') <- fa (rd {recursionList = M : recursionList rd}) st
+            let newlist =
+                    case recursionList rd of
+                        (M:_) -> recursionList rd -- don't add another one, it just takes up space.
+                        _ -> M : recursionList rd
+            (ra, st') <- fa (rd {recursionList = newlist}) st
             st'' <- tryFlushZiftBuffer rd st'
             case ra of
                 ZiftSuccess a ->
