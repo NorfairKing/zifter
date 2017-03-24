@@ -80,14 +80,7 @@ runWith func sets = do
     let runner =
             withSystemTempDir "zifter" $ \d ->
                 withCurrentDir d $ do
-                    (r, zs) <-
-                        let zfunc = do
-                                printZiftMessage
-                                    ("CHANGED WORKING DIRECTORY TO " ++
-                                     toFilePath d)
-                                func ctx
-                                printZiftMessage "ZIFTER DONE"
-                        in zift zfunc ctx mempty
+                    (r, zs) <- zift (func ctx) ctx mempty
                     result <-
                         case r of
                             ZiftFailed err -> do

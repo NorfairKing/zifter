@@ -10,6 +10,7 @@ import Control.Monad.IO.Class
 import Path
 import Path.IO
 import System.Exit
+import System.IO
 import System.Process
 
 import Zifter.Script
@@ -17,41 +18,81 @@ import Zifter.Zift
 
 recursiveZift :: ZiftScript ()
 recursiveZift = do
-    preprocessor $
+    preprocessor $ do
+        rd <- getRootDir
+        printRecursionMsg $
+            unwords ["RECURSIVE PREPROCESSING STARTING FROM", toFilePath rd]
         recursively $ \ziftFile -> runZiftScript ziftFile "preprocess"
-    checker $ recursively $ \ziftFile -> runZiftScript ziftFile "check"
+        printRecursionMsg $
+            unwords ["RECURSIVE PREPROCESSING FROM", toFilePath rd, "DONE."]
+    checker $ do
+        rd <- getRootDir
+        printRecursionMsg $
+            unwords ["RECURSIVE CHECKING STARTING FROM", toFilePath rd]
+        recursively $ \ziftFile -> runZiftScript ziftFile "check"
+        printRecursionMsg $
+            unwords ["RECURSIVE CHECKING FROM", toFilePath rd, "DONE"]
 
 recursively :: (Path Abs File -> Zift ()) -> Zift ()
 recursively func = do
     fs <- findZiftFilesRecursively
-    rd <- getRootDir
-    printPreprocessingDone $
-        unwords ["RECURSIVE ZIFT STARTING AT", toFilePath rd]
     -- Do it in serial (for errors to show up nicely)
     -- TODO make it possible to run them in parallel instead?
     --      we might have to make it possible for zift to output something machine-readible instead.
     forM_ fs func
-    printPreprocessingDone $ unwords ["RECURSIVE ZIFT DONE AT", toFilePath rd]
+
+halfIndent :: String -> String
+halfIndent = ("  " ++)
+
+indent :: String -> String
+indent = halfIndent . ("| " ++)
+
+printRecursionMsg :: String -> Zift ()
+printRecursionMsg = printZiftMessage . halfIndent
 
 runZiftScript :: Path Abs File -> String -> Zift ()
 runZiftScript scriptPath command = do
-    printZiftMessage $ unwords ["ZIFTING", toFilePath scriptPath, "RECURSIVELY"]
+    rd <- getRootDir
+    printRecursionMsg $
+        unwords
+            [ "ZIFTING"
+            , toFilePath scriptPath
+            , "AS PART OF RECURSIVE ZIFT FROM"
+            , toFilePath rd
+            ]
     let cmd = unwords [toFilePath scriptPath, command]
-    let cp = (shell cmd) {cwd = Just $ toFilePath $ parent scriptPath}
-    ec <-
-        liftIO $ do
-            (_, _, _, ph) <- createProcess cp
-            waitForProcess ph
+    let cp =
+            (shell cmd)
+            {cwd = Just $ toFilePath $ parent scriptPath, std_out = CreatePipe}
+    (_, mouth, merrh, ph) <- liftIO $ createProcess cp
+    ec <- liftIO $ waitForProcess ph
+    case mouth of
+        Nothing -> pure ()
+        Just outh -> do
+            cts <- liftIO (hGetContents outh)
+            forM_ (lines cts) $ printZift . indent
+    case merrh of
+        Nothing -> pure ()
+        Just errh -> liftIO (hGetContents errh) >>= printZift
     case ec of
-        ExitSuccess -> pure ()
+        ExitSuccess ->
+            printRecursionMsg $
+            unwords
+                [ "ZIFTING"
+                , toFilePath scriptPath
+                , "AS PART OF RECURSIVE ZIFT FROM"
+                , toFilePath rd
+                , "DONE"
+                ]
         ExitFailure c -> do
-            printPreprocessingError "RECURSIVE ZIFT FAILED"
+            printPreprocessingError $ halfIndent "RECURSIVE ZIFT FAILED"
             fail $
                 unwords
-                    [ cmd
+                    [ show cmd
                     , "failed with exit code"
                     , show c
-                    , "while recursively zifting."
+                    , "while recursively zifting with"
+                    , toFilePath scriptPath
                     ]
 
 findZiftFilesRecursively :: Zift [Path Abs File]

@@ -2,8 +2,9 @@ Zifter
 ======
 
 
-- Write your own pre-commit tests
+- Write your own pre-commit tests with a simple EDSL
 - Automatic parallelisation
+- Linear-looking output
 - Only one dependency: [`stack`](https://haskellstack.org/)
 
 

@@ -4,7 +4,7 @@ module Zifter.Zift.Types where
 
 import Prelude
 
-import Control.Concurrent.Async (concurrently)
+import Control.Concurrent.Async (waitEither, wait, cancel, async)
 import Control.Concurrent.STM (TChan, writeTChan, atomically)
 import Control.Exception (SomeException, displayException, catch)
 import Control.Monad.Catch (MonadThrow(..))
@@ -18,20 +18,21 @@ import System.Console.ANSI (SGR)
 
 import Zifter.OptParse.Types
 
-data ZiftOutput =
-    ZiftOutput [SGR]
-               String
-    deriving (Show, Eq, Generic)
+data ZiftOutput = ZiftOutput
+    { outputColors :: [SGR]
+    , outputMessage :: String
+    } deriving (Show, Eq, Generic)
 
 data ZiftContext = ZiftContext
     { rootdir :: Path Abs Dir
     , settings :: Settings
     , printChan :: TChan ZiftOutput
-    , recursionList :: [LR] -- In reverse order
+    , recursionList :: [LMR] -- In reverse order
     } deriving (Generic)
 
-data LR
+data LMR
     = L
+    | M
     | R
     deriving (Show, Eq, Generic)
 
@@ -52,8 +53,7 @@ newtype Zift a = Zift
     { zift :: ZiftContext -> ZiftState -> IO (ZiftResult a, ZiftState)
     } deriving (Generic)
 
-instance Monoid a =>
-         Monoid (Zift a) where
+instance Monoid a => Monoid (Zift a) where
     mempty = Zift $ \_ s -> pure (mempty, s)
     mappend z1 z2 = mappend <$> z1 <*> z2
 
@@ -70,16 +70,39 @@ instance Applicative Zift where
         Zift $ \zc st -> do
             let zc1 = zc {recursionList = L : recursionList zc}
                 zc2 = zc {recursionList = R : recursionList zc}
-            ((fa, zs1), (a, zs2)) <-
-                concurrently (faf zc1 mempty) (af zc2 mempty)
-            let st' = st `mappend` zs1 `mappend` zs2
-            st'' <- tryFlushZiftBuffer zc st'
-            pure (fa <*> a, st'')
+            afaf <- async (faf zc1 mempty)
+            aaf <- async (af zc2 mempty)
+            efaa <- waitEither afaf aaf
+            let complete (fa, zs1) (a, zs2) = do
+                    let st' = st `mappend` zs1 `mappend` zs2
+                    st'' <- tryFlushZiftBuffer zc st'
+                    pure (fa <*> a, st'')
+            case efaa of
+                Left t1@(far, zs1) ->
+                    case far of
+                        ZiftFailed s -> do
+                            cancel aaf
+                            pure (ZiftFailed s, st `mappend` zs1)
+                        _ -> do
+                            t2 <- wait aaf
+                            complete t1 t2
+                Right t2@(ar, zs2) ->
+                    case ar of
+                        ZiftFailed s -> do
+                            cancel afaf
+                            pure (ZiftFailed s, st `mappend` zs2)
+                        _ -> do
+                            t1 <- wait afaf
+                            complete t1 t2
 
 instance Monad Zift where
     (Zift fa) >>= mb =
         Zift $ \rd st -> do
-            (ra, st') <- fa rd st
+            let newlist =
+                    case recursionList rd of
+                        (M:_) -> recursionList rd -- don't add another one, it just takes up space.
+                        _ -> M : recursionList rd
+            (ra, st') <- fa (rd {recursionList = newlist}) st
             st'' <- tryFlushZiftBuffer rd st'
             case ra of
                 ZiftSuccess a ->
@@ -107,13 +130,11 @@ data ZiftResult a
     | ZiftFailed String
     deriving (Show, Eq, Generic)
 
-instance Validity a =>
-         Validity (ZiftResult a) where
+instance Validity a => Validity (ZiftResult a) where
     isValid (ZiftSuccess a) = isValid a
     isValid _ = True
 
-instance Monoid a =>
-         Monoid (ZiftResult a) where
+instance Monoid a => Monoid (ZiftResult a) where
     mempty = ZiftSuccess mempty
     mappend z1 z2 = mappend <$> z1 <*> z2
 
@@ -138,10 +159,15 @@ instance MonadFail ZiftResult where
 -- | Internal: do not use yourself.
 tryFlushZiftBuffer :: ZiftContext -> ZiftState -> IO ZiftState
 tryFlushZiftBuffer ctx st =
-    if null $ recursionList ctx
+    if flushable $ recursionList ctx
         then do
             let zos = reverse $ bufferedOutput st
                 st' = st {bufferedOutput = []}
             atomically $ mapM_ (writeTChan $ printChan ctx) zos
             pure st'
         else pure st
+
+-- The buffer is flushable when it's guaranteed to be the first in the in-order
+-- of the evaluation tree.
+flushable :: [LMR] -> Bool
+flushable = all (== M) . dropWhile (== L)
