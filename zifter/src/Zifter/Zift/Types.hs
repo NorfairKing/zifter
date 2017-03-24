@@ -27,11 +27,12 @@ data ZiftContext = ZiftContext
     { rootdir :: Path Abs Dir
     , settings :: Settings
     , printChan :: TChan ZiftOutput
-    , recursionList :: [LR] -- In reverse order
+    , recursionList :: [LMR] -- In reverse order
     } deriving (Generic)
 
-data LR
+data LMR
     = L
+    | M
     | R
     deriving (Show, Eq, Generic)
 
@@ -97,7 +98,7 @@ instance Applicative Zift where
 instance Monad Zift where
     (Zift fa) >>= mb =
         Zift $ \rd st -> do
-            (ra, st') <- fa rd st
+            (ra, st') <- fa (rd {recursionList = M : recursionList rd}) st
             st'' <- tryFlushZiftBuffer rd st'
             case ra of
                 ZiftSuccess a ->
@@ -154,10 +155,15 @@ instance MonadFail ZiftResult where
 -- | Internal: do not use yourself.
 tryFlushZiftBuffer :: ZiftContext -> ZiftState -> IO ZiftState
 tryFlushZiftBuffer ctx st =
-    if null $ recursionList ctx
+    if flushable $ recursionList ctx
         then do
             let zos = reverse $ bufferedOutput st
                 st' = st {bufferedOutput = []}
             atomically $ mapM_ (writeTChan $ printChan ctx) zos
             pure st'
         else pure st
+
+-- The buffer is flushable when it's guaranteed to be the first in the in-order
+-- of the evaluation tree.
+flushable :: [LMR] -> Bool
+flushable = all (== M) . dropWhile (== L)

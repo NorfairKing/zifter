@@ -323,10 +323,10 @@ spec = do
                         zr `shouldBe` ZiftFailed ("user error (" ++ s ++ ")")
                         zs `shouldBe` state
         describe "tryFlushZiftBuffer" $ do
-            it "does not do anything if there recursion list is not empty" $
+            it "does not do anything if there recursion list is not flushable" $
                 forAll genUnchecked $ \state ->
                     forAllCtx $ \ctx ->
-                        if null $ recursionList ctx
+                        if flushable $ recursionList ctx
                             then pure () -- Not testing this part now.
                             else do
                                 state' <- tryFlushZiftBuffer ctx state
@@ -334,12 +334,14 @@ spec = do
             it
                 "flushes the entire buffer in the correct order, if the recursion list is empty" $
                 forAll genUnchecked $ \state ->
-                    forAllCtx $ \ctx -> do
-                        state' <-
-                            tryFlushZiftBuffer ctx {recursionList = []} state
-                        state' `shouldBe` state {bufferedOutput = []}
-                        res <- readAllFrom $ printChan ctx
-                        res `shouldBe` reverse (bufferedOutput state)
+                    forAllCtx $ \ctx ->
+                        if flushable $ recursionList ctx
+                            then do
+                                state' <- tryFlushZiftBuffer ctx state
+                                state' `shouldBe` state {bufferedOutput = []}
+                                res <- readAllFrom $ printChan ctx
+                                res `shouldBe` reverse (bufferedOutput state)
+                            else pure ()
 
 forAllCtx :: Testable (IO b) => (ZiftContext -> IO b) -> Property
 forAllCtx func =
@@ -395,6 +397,6 @@ readAllFrom chan = do
             rest <- readAllFrom chan
             pure (r : rest)
 
-withRecursionList :: [LR] -> Zift a -> Zift a
+withRecursionList :: [LMR] -> Zift a -> Zift a
 withRecursionList rl zf =
     zf {zift = \zc zs -> zift zf (zc {recursionList = rl}) zs}

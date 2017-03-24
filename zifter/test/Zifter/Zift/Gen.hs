@@ -40,7 +40,7 @@ deriving instance Generic SGR
 
 instance GenUnchecked SGR
 
-instance GenUnchecked LR
+instance GenUnchecked LMR
 
 instance GenUnchecked ZiftOutput
 
