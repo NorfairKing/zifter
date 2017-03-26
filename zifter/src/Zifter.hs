@@ -15,7 +15,6 @@ module Zifter
     , checker
     , ziftP
     , recursiveZift
-      -- ** Zift Script utilities
     , ZiftScript
     , renderZiftSetup
       -- * Defining your own zift actions
