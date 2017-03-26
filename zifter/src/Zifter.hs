@@ -37,6 +37,11 @@ module Zifter
     , printPreprocessingDone
     , printPreprocessingError
     , printWithColors
+      -- * Utilities
+      --
+      -- | You will most likely not need these
+    , runZiftAuto
+    , runZift
     ) where
 
 import Control.Concurrent (newEmptyMVar, putMVar, tryTakeMVar)
@@ -92,26 +97,25 @@ ziftWithSetup setup = do
 
 run :: ZiftSetup -> Settings -> IO ()
 run ZiftSetup {..} =
-    runWith $ \_ -> do
+    runZiftAuto $ \_ -> do
         runAsPreProcessor ziftPreprocessor
         runAsPreCheck ziftPreCheck
         runAsChecker ziftChecker
 
 runPreProcessor :: ZiftSetup -> Settings -> IO ()
 runPreProcessor ZiftSetup {..} =
-    runWith $ \_ -> runAsPreProcessor ziftPreprocessor
+    runZiftAuto $ \_ -> runAsPreProcessor ziftPreprocessor
 
 runPreChecker :: ZiftSetup -> Settings -> IO ()
-runPreChecker ZiftSetup {..} = runWith $ \_ -> runAsPreCheck ziftPreCheck
+runPreChecker ZiftSetup {..} = runZiftAuto $ \_ -> runAsPreCheck ziftPreCheck
 
 runChecker :: ZiftSetup -> Settings -> IO ()
-runChecker ZiftSetup {..} = runWith $ \_ -> runAsChecker ziftChecker
+runChecker ZiftSetup {..} = runZiftAuto $ \_ -> runAsChecker ziftChecker
 
-runWith :: (ZiftContext -> Zift ()) -> Settings -> IO ()
-runWith func sets = do
+runZiftAuto :: (ZiftContext -> Zift ()) -> Settings -> IO ()
+runZiftAuto func sets = do
     rd <- autoRootDir
     pchan <- newTChanIO
-    fmvar <- newEmptyMVar
     let ctx =
             ZiftContext
             { rootdir = rd
@@ -119,10 +123,17 @@ runWith func sets = do
             , printChan = pchan
             , recursionList = []
             }
+    runZift ctx $ func ctx
+
+runZift :: ZiftContext -> Zift () -> IO ()
+runZift ctx zfunc = do
+    let pchan = printChan ctx
+        sets = settings ctx
+    fmvar <- newEmptyMVar
     let runner =
             withSystemTempDir "zifter" $ \d ->
                 withCurrentDir d $ do
-                    (r, zs) <- zift (func ctx) ctx mempty
+                    (r, zs) <- zift zfunc ctx mempty
                     result <-
                         case r of
                             ZiftFailed err -> do
@@ -204,7 +215,7 @@ autoRootDir = do
 install :: Bool -> Settings -> IO ()
 install recursive sets = do
     if recursive
-        then flip runWith sets $ \_ ->
+        then flip runZiftAuto sets $ \_ ->
                  recursively $ \ziftFile -> liftIO $ installIn $ parent ziftFile
         else pure ()
     autoRootDir >>= installIn
@@ -261,7 +272,8 @@ installIn rootdir = do
         Just "" -> justDoIt
         Just c ->
             if c == hookContents
-                then putStrLn "Hook already installed."
+                then putStrLn $
+                     unwords ["Hook already installed for", toFilePath rootdir]
                 else die $
                      unlines
                          [ "Not installing, a pre-commit hook already exists:"
