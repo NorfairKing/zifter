@@ -2,9 +2,9 @@ Zifter
 ======
 
 
-- Write your own pre-commit tests with a simple EDSL
+- Write your own pre-commit tests for any project with a simple EDSL
 - Automatic parallelisation
-- Linear-looking output
+- Output that looks as if everything was run sequentially.
 - Only one dependency: [`stack`](https://haskellstack.org/)
 
 
@@ -23,7 +23,31 @@ This ensures that `zift.hs run` will be run before every `git commit`, and that 
 
 You can also run individual parts of the `zift.hs` script with `zift.hs preprocess`, `zift.hs precheck" and `zift.hs check".
 
-### Example
+### How to write a `zift.hs` script
+
+Zifter is intended to be a composable (and extensible) code quality tool.
+You can write your own `zift.hs` scripts to define the code quality standards that you want to uphold in your project.
+
+A `zift.hs` has three main sections:
+
+- `preprocessor`
+- `prechecker`
+- `checker`
+
+In the `preprocess` section, you define what needs to happen with your code before you start checking anything.
+For example, this is where you put code formatters.
+
+In the `prechecker` section, you define what needs to happen with the repository after the preprocessor check.
+For example, after you have reformatted all the source files, you will probably want to run `git add .`, so that these changes are also in the commit.
+
+In the `checker` section, you define all the checks that need to succeed in order to allow a commit.
+For example, you probably want to ensure that the project builds successfully, that the tests pass, etc...
+
+To find predefined functions that you can put in these sections, have a look at the `zifter-*` packages.
+
+#### Example
+
+The following is an example of a `zift.hs` script for a Haskell project.
 
 [`zift.hs`](/zift.hs)
 
