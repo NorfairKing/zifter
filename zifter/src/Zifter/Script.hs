@@ -1,6 +1,6 @@
 module Zifter.Script
     ( preprocessor
-    , precheck
+    , prechecker
     , checker
     , module Zifter.Script.Types
     ) where
@@ -15,9 +15,9 @@ preprocessor prep =
     ZiftScript {renderZiftScript = pure ((), mempty {ziftPreprocessor = prep})}
 
 -- | Add a given zift action as a prechecker.
-precheck :: Zift () -> ZiftScript ()
-precheck func =
-    ZiftScript {renderZiftScript = pure ((), mempty {ziftPreCheck = func})}
+prechecker :: Zift () -> ZiftScript ()
+prechecker func =
+    ZiftScript {renderZiftScript = pure ((), mempty {ziftPreChecker = func})}
 
 -- | Add a given zift action as a checker.
 checker :: Zift () -> ZiftScript ()

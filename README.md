@@ -8,6 +8,21 @@ Zifter
 - Only one dependency: [`stack`](https://haskellstack.org/)
 
 
+### What to do with a `zift.hs` script when it's in a repository
+
+A `zift.hs` script is a code quality tool.
+It can be used to define and enforce code quality standards in a repository.
+
+To run a `zift.hs` script, execute `./zift.hs run`.
+This will run the preprocessor, the prechecker and the checker.
+If any point something fails, the entire execution will fail and the exit code will be nonzero.
+
+To start using a `zift.hs` script automatically, you need to install as a pre-commit script with `zift.hs install`.
+This ensures that `zift.hs run` will be run before every `git commit`, and that you will not be able to commit unless `zift.hs run` exits successfully.
+(There is still a way around this with `git commit --no-verify` for emergencies.)
+
+You can also run individual parts of the `zift.hs` script with `zift.hs preprocess`, `zift.hs precheck" and `zift.hs check".
+
 ### Example
 
 [`zift.hs`](/zift.hs)
@@ -39,7 +54,7 @@ import Zifter.Stack
 main :: IO ()
 main =
     ziftWith $ do
-        preprocessor $ ziftP [hindentZift, cabalFormatZift]
+        preprocess $ ziftP [hindentZift, cabalFormatZift]
         precheck gitAddAllZift
         checker $ do
             hlintZift

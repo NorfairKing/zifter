@@ -11,8 +11,8 @@ module Zifter
     , ziftWithSetup
       -- * Defining your own zift scripts
     , preprocessor
+    , prechecker
     , checker
-    , precheck
     , ziftP
     , recursiveZift
       -- ** Zift Script utilities
@@ -99,7 +99,7 @@ run :: ZiftSetup -> Settings -> IO ()
 run ZiftSetup {..} =
     runZiftAuto $ \_ -> do
         runAsPreProcessor ziftPreprocessor
-        runAsPreCheck ziftPreCheck
+        runAsPreChecker ziftPreChecker
         runAsChecker ziftChecker
 
 runPreProcessor :: ZiftSetup -> Settings -> IO ()
@@ -107,7 +107,8 @@ runPreProcessor ZiftSetup {..} =
     runZiftAuto $ \_ -> runAsPreProcessor ziftPreprocessor
 
 runPreChecker :: ZiftSetup -> Settings -> IO ()
-runPreChecker ZiftSetup {..} = runZiftAuto $ \_ -> runAsPreCheck ziftPreCheck
+runPreChecker ZiftSetup {..} =
+    runZiftAuto $ \_ -> runAsPreChecker ziftPreChecker
 
 runChecker :: ZiftSetup -> Settings -> IO ()
 runChecker ZiftSetup {..} = runZiftAuto $ \_ -> runAsChecker ziftChecker
@@ -183,8 +184,8 @@ runAsPreProcessor func = do
     func
     printZiftMessage "PREPROCESSOR DONE"
 
-runAsPreCheck :: Zift () -> Zift ()
-runAsPreCheck func = do
+runAsPreChecker :: Zift () -> Zift ()
+runAsPreChecker func = do
     printZiftMessage "PRECHECKER STARTING"
     func
     printZiftMessage "PRECHECKER DONE"

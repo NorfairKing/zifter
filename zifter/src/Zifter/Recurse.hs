@@ -31,7 +31,7 @@ recursiveZift = do
         recursively $ \ziftFile -> runZiftScript ziftFile "preprocess"
         printRecursionMsg $
             unwords ["RECURSIVE PREPROCESSING FROM", toFilePath rd, "DONE."]
-    precheck $ do
+    prechecker $ do
         rd <- getRootDir
         printRecursionMsg $
             unwords ["RECURSIVE PRECHECKING STARTING FROM", toFilePath rd]
