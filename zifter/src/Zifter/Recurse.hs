@@ -16,6 +16,12 @@ import System.Process
 import Zifter.Script
 import Zifter.Zift
 
+-- | Recursively call each @zift.hs@ script in the directories below the
+-- directory of the currently executing @zift.hs@ script.
+--
+-- Only the topmost @zift.hs@ script in each directory is executed.
+-- This means that, to execute all @zift.hs@ scripts recursively, each of those
+-- @zift.hs@ scripts must also have a 'recursiveZift' declaration.
 recursiveZift :: ZiftScript ()
 recursiveZift = do
     preprocessor $ do
@@ -25,6 +31,13 @@ recursiveZift = do
         recursively $ \ziftFile -> runZiftScript ziftFile "preprocess"
         printRecursionMsg $
             unwords ["RECURSIVE PREPROCESSING FROM", toFilePath rd, "DONE."]
+    precheck $ do
+        rd <- getRootDir
+        printRecursionMsg $
+            unwords ["RECURSIVE PRECHECKING STARTING FROM", toFilePath rd]
+        recursively $ \ziftFile -> runZiftScript ziftFile "precheck"
+        printRecursionMsg $
+            unwords ["RECURSIVE PRECHECKING FROM", toFilePath rd, "DONE."]
     checker $ do
         rd <- getRootDir
         printRecursionMsg $

@@ -12,6 +12,7 @@ data Command
     = CommandRun
     | CommandInstall Bool -- | Recursive?
     | CommandPreProcess
+    | CommandPreCheck
     | CommandCheck
     deriving (Show, Eq)
 
@@ -27,6 +28,7 @@ data Dispatch
     = DispatchRun
     | DispatchInstall Bool -- | recursive ?
     | DispatchPreProcess
+    | DispatchPreCheck
     | DispatchCheck
     deriving (Show, Eq, Generic)
 

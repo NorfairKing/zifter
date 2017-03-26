@@ -9,6 +9,9 @@ newtype ZiftScript a = ZiftScript
     { renderZiftScript :: IO (a, ZiftSetup)
     } deriving (Generic)
 
+renderZiftSetup :: ZiftScript a -> IO ZiftSetup
+renderZiftSetup = fmap snd . renderZiftScript
+
 instance Functor ZiftScript where
     fmap f (ZiftScript func) =
         ZiftScript $ do

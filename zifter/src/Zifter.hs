@@ -1,15 +1,42 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE RecordWildCards #-}
 
+-- | The main 'Zifter' module.
+--
+-- In most cases this should be the only module you import to start writing a
+-- @zift.hs@ script. You will most likely want to import the appropriate
+-- modules from the 'zifter-*' companion packages.
 module Zifter
     ( ziftWith
     , ziftWithSetup
+      -- * Defining your own zift scripts
     , preprocessor
     , checker
     , precheck
     , ziftP
     , recursiveZift
-    , module Zifter.Script.Types
+      -- ** Zift Script utilities
+    , ZiftScript
+    , renderZiftSetup
+      -- * Defining your own zift actions
+    , Zift
+    , getRootDir
+    , getSettings
+    , getSetting
+    , Settings(..)
+      -- ** Console outputs of a zift action
+      --
+      -- | Because 'Zift' actions are automatically parallelised, it is important
+      -- that they do not arbitrarily output data to the console.
+      -- Instead, you should use these functions to output to the console.
+      --
+      -- The 'ziftWith' and 'ziftWithSetup' functions will take care of ensuring
+      -- that the output appears linear.
+    , printZift
+    , printZiftMessage
+    , printPreprocessingDone
+    , printPreprocessingError
+    , printWithColors
     ) where
 
 import Control.Concurrent (newEmptyMVar, putMVar, tryTakeMVar)
@@ -33,13 +60,24 @@ import System.IO
 import Zifter.OptParse
 import Zifter.Recurse
 import Zifter.Script
-import Zifter.Script.Types
 import Zifter.Setup
 import Zifter.Zift
 
+-- | Run a 'ZiftScript' to create the 'ZiftSetup', and then use 'ziftWithSetup'
+--
+-- > ziftWith = renderZiftSetup >=> ziftWithSetup
 ziftWith :: ZiftScript () -> IO ()
-ziftWith = renderZiftScript >=> (ziftWithSetup . snd)
+ziftWith = renderZiftSetup >=> ziftWithSetup
 
+-- | Build a zifter using a 'ZiftSetup'.
+--
+-- A zifter has the capabilities that you would expect from a 'zift.hs' file:
+--
+-- * @zift.hs run@:         Run the @zift.hs@ script as a pre-commit hook.
+-- * @zift.hs preprocess@:  Run the preprocessor
+-- * @zift.hs precheck@:    Run the prechecker
+-- * @zift.hs check@:       Run the checker
+-- * @zift.hs install@:     Install the @zift.hs@ script as a pre-commit hook.
 ziftWithSetup :: ZiftSetup -> IO ()
 ziftWithSetup setup = do
     hSetBuffering stdout NoBuffering
@@ -48,6 +86,7 @@ ziftWithSetup setup = do
     case d of
         DispatchRun -> run setup sets
         DispatchPreProcess -> runPreProcessor setup sets
+        DispatchPreCheck -> runPreChecker setup sets
         DispatchCheck -> runChecker setup sets
         DispatchInstall r -> install r sets
 
@@ -61,6 +100,9 @@ run ZiftSetup {..} =
 runPreProcessor :: ZiftSetup -> Settings -> IO ()
 runPreProcessor ZiftSetup {..} =
     runWith $ \_ -> runAsPreProcessor ziftPreprocessor
+
+runPreChecker :: ZiftSetup -> Settings -> IO ()
+runPreChecker ZiftSetup {..} = runWith $ \_ -> runAsPreCheck ziftPreCheck
 
 runChecker :: ZiftSetup -> Settings -> IO ()
 runChecker ZiftSetup {..} = runWith $ \_ -> runAsChecker ziftChecker
