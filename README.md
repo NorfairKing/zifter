@@ -51,7 +51,7 @@ The following is an example of a `zift.hs` script for a Haskell project.
 
 [`zift.hs`](/zift.hs)
 
-The following zift script first runs `hindent` and `cabal format` on all relevant files, in parallel.
+The following `zift.hs` script first runs `hindent` and `cabal format` on all relevant files, in parallel.
 Then it runs `git add .`.
 Lastly, it runs `hlint` on the entire project and then it runs `stack` to ensure that everything compiles without warnings and the tests succeed.
 
@@ -85,8 +85,49 @@ main =
             stackBuildZift
 ```
 
-- Install the zift script as a pre-commit hook with `./zift.hs install`.
-- Run the zift script manually with `./zift.hs run`.
+### How to write your own `Zift` functions
+
+The functions in the `preprocess`, `precheck` and `checker` sections are of type `Zift ()`.
+
+All the relevant documentation is in [the `Zifter` module](https://hackage.haskell.org/package/zifter/docs/Zifter.html).
+
+It is important to note that `Zift` has a `MonadIO` instance, so that you can embed any `IO` action in a `Zift` action.
+
+### How to use a `zift.hs` script to define your continuous integration setup
+
+The most important parts here are the following:
+
+- Make sure you get `stack`:
+
+```
+addons:
+  apt:
+    packages:
+    - libgmp-dev
+
+before_install:
+  - mkdir -p ~/.local/bin
+  - export PATH=$HOME/.local/bin:$PATH
+  - travis_retry curl -L https://www.stackage.org/stack/linux-x86_64 | tar xz --wildcards --strip-components=1 -C ~/.local/bin '*/stack'
+  - chmod a+x ~/.local/bin/stack
+```
+
+Install all dependencies with stack:
+
+```
+install:
+  - stack  setup
+  - stack  build --only-snapshot
+```
+
+Run the `zift.hs` script on travis.
+
+```
+script:
+  - ./zift.hs run
+```
+
+The `.travis.yml` file in this repository can serve as an example.
 
 ### The name
 
