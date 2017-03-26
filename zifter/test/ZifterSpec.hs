@@ -8,18 +8,12 @@ import Test.Hspec
 import Test.QuickCheck
 import Test.Validity
 
-import Path.IO
-
-import Control.Concurrent (threadDelay)
 import Control.Concurrent.STM
-import Data.Foldable
 import Data.GenValidity.Path ()
-import System.Directory (withCurrentDirectory)
 import System.Exit (ExitCode(..))
 
 import Zifter
 import Zifter.OptParse.Gen ()
-import Zifter.OptParse.Types
 import Zifter.Zift
 import Zifter.Zift.Gen ()
 
