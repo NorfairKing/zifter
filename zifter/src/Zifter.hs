@@ -44,10 +44,10 @@ module Zifter
     , runZift
     ) where
 
-import Control.Concurrent (newEmptyMVar, putMVar, tryTakeMVar)
 import Control.Concurrent.Async (async, wait)
 import Control.Concurrent.STM
-       (newTChanIO, tryReadTChan, readTChan, writeTChan, atomically)
+       (newTChanIO, tryReadTChan, readTChan, writeTChan, atomically,
+        orElse, takeTMVar, putTMVar, newEmptyTMVar)
 import Control.Monad
 import Path
 import Path.IO
@@ -123,13 +123,13 @@ runZiftAuto func sets = do
             , printChan = pchan
             , recursionList = []
             }
-    runZift ctx $ func ctx
+    runZift ctx (func ctx) >>= exitWith
 
-runZift :: ZiftContext -> Zift () -> IO ()
+runZift :: ZiftContext -> Zift () -> IO ExitCode
 runZift ctx zfunc = do
     let pchan = printChan ctx
         sets = settings ctx
-    fmvar <- newEmptyMVar
+    fmvar <- atomically newEmptyTMVar
     let runner =
             withSystemTempDir "zifter" $ \d ->
                 withCurrentDir d $ do
@@ -145,19 +145,16 @@ runZift ctx zfunc = do
                                 pure $ ExitFailure 1
                             ZiftSuccess () -> pure ExitSuccess
                     void $ tryFlushZiftBuffer ctx zs
-                    putMVar fmvar ()
+                    atomically $ putTMVar fmvar ()
                     pure result
     let outputOne :: ZiftOutput -> IO ()
-        outputOne (ZiftOutput commands str)
-                -- when False $ do
-         = do
+        outputOne (ZiftOutput commands str) = do
             let color = setsOutputColor sets
             when color $ setSGR commands
             putStr str
             when color $ setSGR [Reset]
             putStr "\n" -- Because otherwise it doesn't work?
             hFlush stdout
-                -- print str
     let outputAll = do
             mout <- atomically $ tryReadTChan pchan
             case mout of
@@ -166,18 +163,19 @@ runZift ctx zfunc = do
                     outputOne output
                     outputAll
     let printer = do
-            mdone <- tryTakeMVar fmvar
+            mdone <-
+                atomically $
+                (Left <$> takeTMVar fmvar) `orElse` (Right <$> readTChan pchan)
             case mdone of
-                Just () -> outputAll
-                Nothing -> do
-                    output <- atomically $ readTChan pchan
+                Left () -> outputAll
+                Right output -> do
                     outputOne output
                     printer
     printerAsync <- async printer
     runnerAsync <- async runner
     result <- wait runnerAsync
     wait printerAsync
-    exitWith result
+    pure result
 
 runAsPreProcessor :: Zift () -> Zift ()
 runAsPreProcessor func = do
@@ -214,11 +212,11 @@ autoRootDir = do
 
 install :: Bool -> Settings -> IO ()
 install recursive sets = do
+    autoRootDir >>= installIn
     if recursive
         then flip runZiftAuto sets $ \_ ->
                  recursively $ \ziftFile -> liftIO $ installIn $ parent ziftFile
         else pure ()
-    autoRootDir >>= installIn
 
 installIn :: Path Abs Dir -> IO ()
 installIn rootdir = do
@@ -260,13 +258,13 @@ installIn rootdir = do
     mc <- forgivingAbsence $ readFile $ toFilePath preComitFile
     let hookContents = "./zift.hs run\n"
     let justDoIt = do
-            putStrLn $
-                unwords
-                    ["Installed pre-commit script in", toFilePath preComitFile]
             writeFile (toFilePath preComitFile) hookContents
             pcf <- D.getPermissions (toFilePath preComitFile)
             D.setPermissions (toFilePath preComitFile) $
                 D.setOwnerExecutable True pcf
+            putStrLn $
+                unwords
+                    ["Installed pre-commit script in", toFilePath preComitFile]
     case mc of
         Nothing -> justDoIt
         Just "" -> justDoIt
