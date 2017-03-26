@@ -64,6 +64,11 @@ instance Functor Zift where
             st'' <- tryFlushZiftBuffer rd st'
             pure (fmap f r, st'')
 
+-- | 'Zift' actions can be sequenced.
+--
+-- The implementation automatically parallelises the arguments of the
+-- '(<*>)' function. If any of the actions fails, the other is cancelled
+-- and the result fails.
 instance Applicative Zift where
     pure a = Zift $ \_ st -> pure (pure a, st)
     (Zift faf) <*> (Zift af) =
@@ -95,6 +100,7 @@ instance Applicative Zift where
                             t1 <- wait afaf
                             complete t1 t2
 
+-- | 'Zift' actions can be composed.
 instance Monad Zift where
     (Zift fa) >>= mb =
         Zift $ \rd st -> do
@@ -111,9 +117,24 @@ instance Monad Zift where
                 ZiftFailed e -> pure (ZiftFailed e, st'')
     fail = Fail.fail
 
+-- | A 'Zift' action can fail.
+--
+-- To make a Zift action fail, you can use the 'fail :: String -> Zift a'
+-- function.
+--
+-- The implementation uses the given string as the message that is shown at
+-- the very end of the run.
 instance MonadFail Zift where
     fail s = Zift $ \_ st -> pure (ZiftFailed s, st)
 
+-- | Any IO action can be part of a 'Zift' action.
+--
+-- This is the most important instance for the end user.
+--
+-- > liftIO :: IO a -> Zift a
+-- allows embedding arbitrary IO actions inside a 'Zift' action.
+--
+-- The implementation also ensures that exceptions are caught.
 instance MonadIO Zift where
     liftIO act =
         Zift $ \_ st ->

@@ -1,21 +1,53 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE RecordWildCards #-}
 
+-- | The main 'Zifter' module.
+--
+-- In most cases this should be the only module you import to start writing a
+-- @zift.hs@ script. You will most likely want to import the appropriate
+-- modules from the 'zifter-*' companion packages.
 module Zifter
     ( ziftWith
     , ziftWithSetup
+      -- * Defining your own zift scripts
     , preprocessor
+    , prechecker
     , checker
-    , precheck
     , ziftP
     , recursiveZift
-    , module Zifter.Script.Types
+      -- ** Zift Script utilities
+    , ZiftScript
+    , renderZiftSetup
+      -- * Defining your own zift actions
+    , Zift
+    , getRootDir
+    , getSettings
+    , getSetting
+    , Settings(..)
+      -- ** Console outputs of a zift action
+      --
+      -- | Because 'Zift' actions are automatically parallelised, it is important
+      -- that they do not arbitrarily output data to the console.
+      -- Instead, you should use these functions to output to the console.
+      --
+      -- The 'ziftWith' and 'ziftWithSetup' functions will take care of ensuring
+      -- that the output appears linear.
+    , printZift
+    , printZiftMessage
+    , printPreprocessingDone
+    , printPreprocessingError
+    , printWithColors
+      -- * Utilities
+      --
+      -- | You will most likely not need these
+    , runZiftAuto
+    , runZift
     ) where
 
-import Control.Concurrent (newEmptyMVar, putMVar, tryTakeMVar)
 import Control.Concurrent.Async (async, wait)
 import Control.Concurrent.STM
-       (newTChanIO, tryReadTChan, readTChan, writeTChan, atomically)
+       (newTChanIO, tryReadTChan, readTChan, writeTChan, atomically,
+        orElse, takeTMVar, putTMVar, newEmptyTMVar)
 import Control.Monad
 import Path
 import Path.IO
@@ -33,13 +65,24 @@ import System.IO
 import Zifter.OptParse
 import Zifter.Recurse
 import Zifter.Script
-import Zifter.Script.Types
 import Zifter.Setup
 import Zifter.Zift
 
+-- | Run a 'ZiftScript' to create the 'ZiftSetup', and then use 'ziftWithSetup'
+--
+-- > ziftWith = renderZiftSetup >=> ziftWithSetup
 ziftWith :: ZiftScript () -> IO ()
-ziftWith = renderZiftScript >=> (ziftWithSetup . snd)
+ziftWith = renderZiftSetup >=> ziftWithSetup
 
+-- | Build a zifter using a 'ZiftSetup'.
+--
+-- A zifter has the capabilities that you would expect from a 'zift.hs' file:
+--
+-- * @zift.hs run@:         Run the @zift.hs@ script as a pre-commit hook.
+-- * @zift.hs preprocess@:  Run the preprocessor
+-- * @zift.hs precheck@:    Run the prechecker
+-- * @zift.hs check@:       Run the checker
+-- * @zift.hs install@:     Install the @zift.hs@ script as a pre-commit hook.
 ziftWithSetup :: ZiftSetup -> IO ()
 ziftWithSetup setup = do
     hSetBuffering stdout NoBuffering
@@ -48,28 +91,32 @@ ziftWithSetup setup = do
     case d of
         DispatchRun -> run setup sets
         DispatchPreProcess -> runPreProcessor setup sets
+        DispatchPreCheck -> runPreChecker setup sets
         DispatchCheck -> runChecker setup sets
         DispatchInstall r -> install r sets
 
 run :: ZiftSetup -> Settings -> IO ()
 run ZiftSetup {..} =
-    runWith $ \_ -> do
+    runZiftAuto $ \_ -> do
         runAsPreProcessor ziftPreprocessor
-        runAsPreCheck ziftPreCheck
+        runAsPreChecker ziftPreChecker
         runAsChecker ziftChecker
 
 runPreProcessor :: ZiftSetup -> Settings -> IO ()
 runPreProcessor ZiftSetup {..} =
-    runWith $ \_ -> runAsPreProcessor ziftPreprocessor
+    runZiftAuto $ \_ -> runAsPreProcessor ziftPreprocessor
+
+runPreChecker :: ZiftSetup -> Settings -> IO ()
+runPreChecker ZiftSetup {..} =
+    runZiftAuto $ \_ -> runAsPreChecker ziftPreChecker
 
 runChecker :: ZiftSetup -> Settings -> IO ()
-runChecker ZiftSetup {..} = runWith $ \_ -> runAsChecker ziftChecker
+runChecker ZiftSetup {..} = runZiftAuto $ \_ -> runAsChecker ziftChecker
 
-runWith :: (ZiftContext -> Zift ()) -> Settings -> IO ()
-runWith func sets = do
+runZiftAuto :: (ZiftContext -> Zift ()) -> Settings -> IO ()
+runZiftAuto func sets = do
     rd <- autoRootDir
     pchan <- newTChanIO
-    fmvar <- newEmptyMVar
     let ctx =
             ZiftContext
             { rootdir = rd
@@ -77,10 +124,17 @@ runWith func sets = do
             , printChan = pchan
             , recursionList = []
             }
+    runZift ctx (func ctx) >>= exitWith
+
+runZift :: ZiftContext -> Zift () -> IO ExitCode
+runZift ctx zfunc = do
+    let pchan = printChan ctx
+        sets = settings ctx
+    fmvar <- atomically newEmptyTMVar
     let runner =
             withSystemTempDir "zifter" $ \d ->
                 withCurrentDir d $ do
-                    (r, zs) <- zift (func ctx) ctx mempty
+                    (r, zs) <- zift zfunc ctx mempty
                     result <-
                         case r of
                             ZiftFailed err -> do
@@ -92,19 +146,16 @@ runWith func sets = do
                                 pure $ ExitFailure 1
                             ZiftSuccess () -> pure ExitSuccess
                     void $ tryFlushZiftBuffer ctx zs
-                    putMVar fmvar ()
+                    atomically $ putTMVar fmvar ()
                     pure result
     let outputOne :: ZiftOutput -> IO ()
-        outputOne (ZiftOutput commands str)
-                -- when False $ do
-         = do
+        outputOne (ZiftOutput commands str) = do
             let color = setsOutputColor sets
             when color $ setSGR commands
             putStr str
             when color $ setSGR [Reset]
             putStr "\n" -- Because otherwise it doesn't work?
             hFlush stdout
-                -- print str
     let outputAll = do
             mout <- atomically $ tryReadTChan pchan
             case mout of
@@ -113,18 +164,19 @@ runWith func sets = do
                     outputOne output
                     outputAll
     let printer = do
-            mdone <- tryTakeMVar fmvar
+            mdone <-
+                atomically $
+                (Left <$> takeTMVar fmvar) `orElse` (Right <$> readTChan pchan)
             case mdone of
-                Just () -> outputAll
-                Nothing -> do
-                    output <- atomically $ readTChan pchan
+                Left () -> outputAll
+                Right output -> do
                     outputOne output
                     printer
     printerAsync <- async printer
     runnerAsync <- async runner
     result <- wait runnerAsync
     wait printerAsync
-    exitWith result
+    pure result
 
 runAsPreProcessor :: Zift () -> Zift ()
 runAsPreProcessor func = do
@@ -132,8 +184,8 @@ runAsPreProcessor func = do
     func
     printZiftMessage "PREPROCESSOR DONE"
 
-runAsPreCheck :: Zift () -> Zift ()
-runAsPreCheck func = do
+runAsPreChecker :: Zift () -> Zift ()
+runAsPreChecker func = do
     printZiftMessage "PRECHECKER STARTING"
     func
     printZiftMessage "PRECHECKER DONE"
@@ -161,11 +213,11 @@ autoRootDir = do
 
 install :: Bool -> Settings -> IO ()
 install recursive sets = do
+    autoRootDir >>= installIn
     if recursive
-        then flip runWith sets $ \_ ->
+        then flip runZiftAuto sets $ \_ ->
                  recursively $ \ziftFile -> liftIO $ installIn $ parent ziftFile
         else pure ()
-    autoRootDir >>= installIn
 
 installIn :: Path Abs Dir -> IO ()
 installIn rootdir = do
@@ -207,19 +259,20 @@ installIn rootdir = do
     mc <- forgivingAbsence $ readFile $ toFilePath preComitFile
     let hookContents = "./zift.hs run\n"
     let justDoIt = do
-            putStrLn $
-                unwords
-                    ["Installed pre-commit script in", toFilePath preComitFile]
             writeFile (toFilePath preComitFile) hookContents
             pcf <- D.getPermissions (toFilePath preComitFile)
             D.setPermissions (toFilePath preComitFile) $
                 D.setOwnerExecutable True pcf
+            putStrLn $
+                unwords
+                    ["Installed pre-commit script in", toFilePath preComitFile]
     case mc of
         Nothing -> justDoIt
         Just "" -> justDoIt
         Just c ->
             if c == hookContents
-                then putStrLn "Hook already installed."
+                then putStrLn $
+                     unwords ["Hook already installed for", toFilePath rootdir]
                 else die $
                      unlines
                          [ "Not installing, a pre-commit hook already exists:"

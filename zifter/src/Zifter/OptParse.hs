@@ -28,6 +28,7 @@ combineToInstructions cmd Flags {..} Configuration = pure (d, sets)
             CommandRun -> DispatchRun
             CommandInstall r -> DispatchInstall r
             CommandPreProcess -> DispatchPreProcess
+            CommandPreCheck -> DispatchPreCheck
             CommandCheck -> DispatchCheck
 
 getConfiguration :: Command -> Flags -> IO Configuration
@@ -67,6 +68,7 @@ parseCommand =
     mconcat
         [ command "run" parseCommandRun
         , command "preprocess" parseCommandPreProcess
+        , command "precheck" parseCommandPreCheck
         , command "check" parseCommandCheck
         , command "install" parseCommandInstall
         ]
@@ -82,6 +84,12 @@ parseCommandPreProcess = info parser modifier
   where
     parser = pure CommandPreProcess
     modifier = fullDesc <> progDesc "PreProcess according to the zift script."
+
+parseCommandPreCheck :: ParserInfo Command
+parseCommandPreCheck = info parser modifier
+  where
+    parser = pure CommandPreCheck
+    modifier = fullDesc <> progDesc "PreCheck according to the zift script."
 
 parseCommandCheck :: ParserInfo Command
 parseCommandCheck = info parser modifier
