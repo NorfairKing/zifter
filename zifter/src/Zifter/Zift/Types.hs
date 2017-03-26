@@ -67,7 +67,7 @@ instance Functor Zift where
 -- | 'Zift' actions can be sequenced.
 --
 -- The implementation automatically parallelises the arguments of the
--- '(<*>)' function. If any of the actions fails, the other is cancelled
+-- @(<*>)@ function. If any of the actions fails, the other is cancelled
 -- and the result fails.
 instance Applicative Zift where
     pure a = Zift $ \_ st -> pure (pure a, st)
@@ -119,7 +119,7 @@ instance Monad Zift where
 
 -- | A 'Zift' action can fail.
 --
--- To make a Zift action fail, you can use the 'fail :: String -> Zift a'
+-- To make a Zift action fail, you can use the @fail :: String -> Zift a@
 -- function.
 --
 -- The implementation uses the given string as the message that is shown at
