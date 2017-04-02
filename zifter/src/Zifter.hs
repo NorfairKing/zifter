@@ -115,10 +115,12 @@ runChecker ZiftSetup {..} = runZiftAuto $ \_ -> runAsChecker ziftChecker
 runZiftAuto :: (ZiftContext -> Zift ()) -> Settings -> IO ()
 runZiftAuto func sets = do
     rd <- autoRootDir
+    td <- resolveDir rd ".zifter"
     pchan <- newTChanIO
     let ctx =
             ZiftContext
             { rootdir = rd
+            , tmpdir = td
             , settings = sets
             , printChan = pchan
             , recursionList = []
