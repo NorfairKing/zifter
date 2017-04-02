@@ -8,6 +8,8 @@ import Test.Hspec
 import Test.QuickCheck
 import Test.Validity
 
+import Path.IO
+
 import Control.Concurrent.STM
 import Data.GenValidity.Path ()
 import System.Exit (ExitCode(..))
@@ -24,9 +26,11 @@ spec =
     forAll genUnchecked $ \sets ->
         forAll genValid $ \rd -> do
             pchan <- newTChanIO
+            td <- resolveDir rd ".zifter"
             let ctx =
                     ZiftContext
                     { rootdir = rd
+                    , tmpdir = td
                     , settings = sets
                     , printChan = pchan
                     , recursionList = []
