@@ -345,18 +345,20 @@ spec = do
 
 forAllCtx :: Testable (IO b) => (ZiftContext -> IO b) -> Property
 forAllCtx func =
-    forAll genUnchecked $ \(rd, sets, rl) -> do
-        pchan <- atomically newTChan
-        td <- resolveDir rd ".zifter"
-        let zc =
-                ZiftContext
-                { rootdir = rd
-                , tmpdir = td
-                , settings = sets
-                , printChan = pchan
-                , recursionList = rl
-                }
-        func zc
+    forAll genUnchecked $ \rd ->
+        forAll genUnchecked $ \sets ->
+            forAll genUnchecked $ \rl ->
+                forAll genUnchecked $ \td -> do
+                    pchan <- atomically newTChan
+                    let zc =
+                            ZiftContext
+                            { rootdir = rd
+                            , tmpdir = td
+                            , settings = sets
+                            , printChan = pchan
+                            , recursionList = rl
+                            }
+                    func zc
 
 runZiftTest :: Settings -> Zift a -> IO (ZiftResult a, ZiftState)
 runZiftTest sets func = do

@@ -20,6 +20,7 @@ module Zifter
       -- * Defining your own zift actions
     , Zift
     , getRootDir
+    , getTmpDir
     , getSettings
     , getSetting
     , Settings(..)

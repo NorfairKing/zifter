@@ -1,5 +1,6 @@
 module Zifter.Zift
     ( getRootDir
+    , getTmpDir
     , getSettings
     , getSetting
     , ziftP
@@ -29,6 +30,12 @@ getContext = Zift $ \zc st -> pure (ZiftSuccess zc, st)
 -- | Get the root directory of the @zift.hs@ script that is being executed.
 getRootDir :: Zift (Path Abs Dir)
 getRootDir = fmap rootdir getContext
+
+-- | Get the temporary directory of the @zift.hs@ script that is being executed.
+--
+-- To persist any state between runs, use this directory.
+getTmpDir :: Zift (Path Abs Dir)
+getTmpDir = fmap tmpdir getContext
 
 -- | Get all the 'Settings'
 getSettings :: Zift Settings
