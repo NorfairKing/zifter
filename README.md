@@ -15,7 +15,7 @@ It can be used to define and enforce code quality standards in a repository.
 
 To run a `zift.hs` script, execute `./zift.hs run`.
 This will run the preprocessor, the prechecker and the checker.
-If atany point something fails, the entire execution will fail and the exit code will be nonzero.
+If at any point something fails, the entire execution will fail and the exit code will be nonzero.
 
 To start using a `zift.hs` script automatically, you need to install it as a pre-commit script with `zift.hs install`.
 This ensures that `zift.hs run` will be run before every `git commit`, and that you will not be able to commit unless `zift.hs run` exits successfully.
