@@ -343,7 +343,9 @@ spec = do
                                 res `shouldBe` reverse (bufferedOutput state)
                             else pure ()
 
-forAllCtx :: Testable (IO b) => (ZiftContext -> IO b) -> Property
+forAllCtx
+    :: Testable (IO b)
+    => (ZiftContext -> IO b) -> Property
 forAllCtx func =
     forAll genUnchecked $ \(rd, sets, rl) -> do
         pchan <- atomically newTChan
@@ -361,18 +363,22 @@ runZiftTest sets func = do
     pchan <- atomically newTChan
     runZiftTestWithChan pchan sets func
 
-runZiftTestWithChan ::
-       TChan ZiftOutput -> Settings -> Zift a -> IO (ZiftResult a, ZiftState)
+runZiftTestWithChan :: TChan ZiftOutput
+                    -> Settings
+                    -> Zift a
+                    -> IO (ZiftResult a, ZiftState)
 runZiftTestWithChan = runZiftTestWith ZiftState {bufferedOutput = []}
 
-runZiftTestWithState ::
-       ZiftState -> Settings -> Zift a -> IO (ZiftResult a, ZiftState)
+runZiftTestWithState :: ZiftState
+                     -> Settings
+                     -> Zift a
+                     -> IO (ZiftResult a, ZiftState)
 runZiftTestWithState state sets func = do
     pchan <- atomically newTChan
     runZiftTestWith state pchan sets func
 
-runZiftTestWith ::
-       ZiftState
+runZiftTestWith
+    :: ZiftState
     -> TChan ZiftOutput
     -> Settings
     -> Zift a
