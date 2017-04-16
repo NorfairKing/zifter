@@ -78,8 +78,8 @@ import Zifter.Stack
 main :: IO ()
 main =
     ziftWith $ do
-        preprocess $ ziftP [hindentZift, cabalFormatZift]
-        precheck gitAddAllZift
+        preprocessor $ ziftP [hindentZift, cabalFormatZift]
+        prechecker gitAddAllZift
         checker $ do
             hlintZift
             stackBuildZift

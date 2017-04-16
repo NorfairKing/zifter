@@ -53,8 +53,7 @@ newtype Zift a = Zift
     { zift :: ZiftContext -> ZiftState -> IO (ZiftResult a, ZiftState)
     } deriving (Generic)
 
-instance Monoid a =>
-         Monoid (Zift a) where
+instance Monoid a => Monoid (Zift a) where
     mempty = Zift $ \_ s -> pure (mempty, s)
     mappend z1 z2 = mappend <$> z1 <*> z2
 
@@ -152,13 +151,11 @@ data ZiftResult a
     | ZiftFailed String
     deriving (Show, Eq, Generic)
 
-instance Validity a =>
-         Validity (ZiftResult a) where
+instance Validity a => Validity (ZiftResult a) where
     isValid (ZiftSuccess a) = isValid a
     isValid _ = True
 
-instance Monoid a =>
-         Monoid (ZiftResult a) where
+instance Monoid a => Monoid (ZiftResult a) where
     mempty = ZiftSuccess mempty
     mappend z1 z2 = mappend <$> z1 <*> z2
 
