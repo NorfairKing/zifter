@@ -3,7 +3,6 @@
 module Zifter.GoogleJavaFormat where
 
 import Control.Monad
-import Data.Foldable
 
 import System.Exit
 import qualified System.FilePath as FP
@@ -24,7 +23,7 @@ googleJavaFormatZift = do
     fs <- liftIO $ snd <$> listDirRecur rd
     let sources =
             filter (not . hidden) $ filter ((== ".java") . fileExtension) fs
-    for_ sources format
+    forZ_ sources format
 
 getJavaFormatter :: Zift (Path Abs File -> Zift ())
 getJavaFormatter = do

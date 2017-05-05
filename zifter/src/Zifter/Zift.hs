@@ -4,6 +4,10 @@ module Zifter.Zift
     , getSettings
     , getSetting
     , ziftP
+    , mapZ
+    , mapZ_
+    , forZ
+    , forZ_
     , printZift
     , printZiftMessage
     , printPreprocessingDone
@@ -14,8 +18,8 @@ module Zifter.Zift
     , module Zifter.Zift.Types
     ) where
 
+import Control.Monad
 import Control.Monad.IO.Class (liftIO)
-import Data.Foldable
 
 import System.Console.ANSI
 
@@ -47,7 +51,31 @@ getSetting func = func <$> getSettings
 
 -- | Declare a given list of 'Zift' actions to be execute in parallel.
 ziftP :: [Zift ()] -> Zift ()
-ziftP = sequenceA_
+ziftP = mconcat
+
+-- | Like 'mapA', but specialised to 'Zift' and '[]', and ensures that the
+-- output of actions is printed in the right order, even if they are
+-- executed in an arbitrary order.
+mapZ :: (a -> Zift b) -> [a] -> Zift [b]
+mapZ func as = forZ as func
+
+-- | Like 'mapA_', but specialised to 'Zift' and '[]', and ensures that the
+-- output of actions is printed in the right order, even if they are
+-- executed in an arbitrary order.
+mapZ_ :: (a -> Zift b) -> [a] -> Zift ()
+mapZ_ func as = forZ_ as func
+
+-- | Like 'for', but specialised to 'Zift' and '[]', and ensures that the
+-- output of actions is printed in the right order, even if they are
+-- executed in an arbitrary order.
+forZ :: [a] -> (a -> Zift b) -> Zift [b]
+forZ [] _ = pure []
+forZ (a:as) func = (:) <$> func a <*> forZ as func
+
+-- | Like 'for_', but specialised to 'Zift' and '[]', and ensures that the output of
+-- actions is printed in the right order.
+forZ_ :: [a] -> (a -> Zift b) -> Zift ()
+forZ_ as func = void $ forZ as func
 
 -- | Print a message (with a newline appended to the end).
 printZift :: String -> Zift ()
