@@ -25,6 +25,7 @@ data ZiftOutput = ZiftOutput
 
 data ZiftContext = ZiftContext
     { rootdir :: Path Abs Dir
+    , tmpdir :: Path Abs Dir
     , settings :: Settings
     , printChan :: TChan ZiftOutput
     , recursionList :: [LMR] -- In reverse order
