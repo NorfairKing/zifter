@@ -30,9 +30,7 @@ getJavaFormatter :: Zift (Path Abs File -> Zift ())
 getJavaFormatter = do
     downloadJavaFormatIfMissing
     jarFile <- javaFormatterJarFile
-    pure $ \abspath
-        -- Stdout formattedSrc <- cmd javaCmd "-jar" javaFormatter abspath
-     ->
+    pure $ \abspath ->
         runZiftCommand $
         unwords
             [ "java"
