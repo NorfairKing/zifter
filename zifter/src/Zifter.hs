@@ -14,6 +14,10 @@ module Zifter
     , prechecker
     , checker
     , ziftP
+    , mapZ
+    , mapZ_
+    , forZ
+    , forZ_
     , recursiveZift
     , ZiftScript
     , renderZiftSetup

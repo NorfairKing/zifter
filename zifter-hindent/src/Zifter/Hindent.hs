@@ -1,7 +1,6 @@
 module Zifter.Hindent where
 
 import Control.Monad.IO.Class
-import Data.Foldable
 import Path
 import Path.IO
 import Safe
@@ -23,7 +22,7 @@ hindentZift = do
     rd <- getRootDir
     fs <- liftIO $ snd <$> listDirRecur rd
     let sources = filter (not . hidden) $ filter ((== ".hs") . fileExtension) fs
-    for_ sources $ hindentSingleSource hindentBin
+    forZ_ sources $ hindentSingleSource hindentBin
 
 getHindent :: Zift HindentBin
 getHindent = do
