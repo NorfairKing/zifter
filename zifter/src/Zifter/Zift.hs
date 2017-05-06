@@ -23,9 +23,6 @@ import Path
 import Zifter.OptParse.Types
 import Zifter.Zift.Types
 
-getContext :: Zift ZiftContext
-getContext = Zift $ \zc st -> pure (ZiftSuccess zc, st)
-
 -- | Get the root directory of the @zift.hs@ script that is being executed.
 getRootDir :: Zift (Path Abs Dir)
 getRootDir = fmap rootdir getContext
@@ -90,9 +87,3 @@ printPreprocessingError = printWithColors [SetColor Foreground Dull Red]
 -- package for more details.
 printWithColors :: [SGR] -> String -> Zift ()
 printWithColors commands str = addZiftOutput $ ZiftOutput commands str
-
-addZiftOutput :: ZiftOutput -> Zift ()
-addZiftOutput zo =
-    Zift $ \_ st -> do
-        let st' = ZiftState {bufferedOutput = zo : bufferedOutput st}
-        pure (ZiftSuccess (), st')

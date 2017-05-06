@@ -46,7 +46,7 @@ module Zifter
 import Control.Concurrent.Async (async, wait)
 import Control.Concurrent.STM
        (newTChanIO, tryReadTChan, readTChan, writeTChan, atomically,
-        orElse, takeTMVar, putTMVar, newEmptyTMVar)
+        TMVar, TChan, orElse, takeTMVar, putTMVar, newEmptyTMVar)
 import Control.Monad
 import Path
 import Path.IO
@@ -124,58 +124,6 @@ runZiftAuto func sets = do
             , recursionList = []
             }
     runZift ctx (func ctx) >>= exitWith
-
-runZift :: ZiftContext -> Zift () -> IO ExitCode
-runZift ctx zfunc = do
-    let pchan = printChan ctx
-        sets = settings ctx
-    fmvar <- atomically newEmptyTMVar
-    let runner =
-            withSystemTempDir "zifter" $ \d ->
-                withCurrentDir d $ do
-                    (r, zs) <- zift zfunc ctx mempty
-                    result <-
-                        case r of
-                            ZiftFailed err -> do
-                                atomically $
-                                    writeTChan pchan $
-                                    ZiftOutput
-                                        [SetColor Foreground Dull Red]
-                                        err
-                                pure $ ExitFailure 1
-                            ZiftSuccess () -> pure ExitSuccess
-                    void $ tryFlushZiftBuffer ctx zs
-                    atomically $ putTMVar fmvar ()
-                    pure result
-    let outputOne :: ZiftOutput -> IO ()
-        outputOne (ZiftOutput commands str) = do
-            let color = setsOutputColor sets
-            when color $ setSGR commands
-            putStr str
-            when color $ setSGR [Reset]
-            putStr "\n" -- Because otherwise it doesn't work?
-            hFlush stdout
-    let outputAll = do
-            mout <- atomically $ tryReadTChan pchan
-            case mout of
-                Nothing -> pure ()
-                Just output -> do
-                    outputOne output
-                    outputAll
-    let printer = do
-            mdone <-
-                atomically $
-                (Left <$> takeTMVar fmvar) `orElse` (Right <$> readTChan pchan)
-            case mdone of
-                Left () -> outputAll
-                Right output -> do
-                    outputOne output
-                    printer
-    printerAsync <- async printer
-    runnerAsync <- async runner
-    result <- wait runnerAsync
-    wait printerAsync
-    pure result
 
 runAsPreProcessor :: Zift () -> Zift ()
 runAsPreProcessor func = do

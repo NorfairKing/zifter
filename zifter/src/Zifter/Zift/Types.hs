@@ -1,6 +1,15 @@
 {-# LANGUAGE DeriveGeneric #-}
 
-module Zifter.Zift.Types where
+module Zifter.Zift.Types
+    ( ZiftOutputMessage(..)
+    , ZiftOutput(..)
+    , ZiftContext(..)
+    , LR
+    , Zift
+    , ZiftResult(..)
+    , getContext
+    , addZiftOutput
+    ) where
 
 import Prelude
 
@@ -18,6 +27,11 @@ import System.Console.ANSI (SGR)
 
 import Zifter.OptParse.Types
 
+data ZiftOutputMessage = ZiftOutputMessage
+    { ziftOutputMessageOriginator :: [LR]
+    , ziftOutputMessage :: ZiftOutput
+    } deriving (Show, Eq, Generic)
+
 data ZiftOutput = ZiftOutput
     { outputColors :: [SGR]
     , outputMessage :: String
@@ -26,43 +40,32 @@ data ZiftOutput = ZiftOutput
 data ZiftContext = ZiftContext
     { rootdir :: Path Abs Dir
     , settings :: Settings
-    , printChan :: TChan ZiftOutput
-    , recursionList :: [LMR] -- In reverse order
+    , printChan :: TChan ZiftOutputMessage -- The LR is in reverse order.
+    , recursionList :: [LR] -- In reverse order
     } deriving (Generic)
 
-data LMR
+data LR
     = L
-    | M
     | R
     deriving (Show, Eq, Generic)
 
 instance Validity ZiftContext where
     isValid = isValid . rootdir
 
-newtype ZiftState = ZiftState
-    { bufferedOutput :: [ZiftOutput] -- In reverse order
-    } deriving (Show, Eq, Generic)
-
-instance Monoid ZiftState where
-    mempty = ZiftState {bufferedOutput = []}
-    mappend zs1 zs2 =
-        ZiftState
-        {bufferedOutput = bufferedOutput zs2 `mappend` bufferedOutput zs1}
-
 newtype Zift a = Zift
-    { zift :: ZiftContext -> ZiftState -> IO (ZiftResult a, ZiftState)
+    { zift :: ZiftContext -> IO (ZiftResult a)
     } deriving (Generic)
 
-instance Monoid a => Monoid (Zift a) where
-    mempty = Zift $ \_ s -> pure (mempty, s)
+instance Monoid a =>
+         Monoid (Zift a) where
+    mempty = Zift $ \_ -> pure mempty
     mappend z1 z2 = mappend <$> z1 <*> z2
 
 instance Functor Zift where
     fmap f (Zift iof) =
-        Zift $ \rd st -> do
-            (r, st') <- iof rd st
-            st'' <- tryFlushZiftBuffer rd st'
-            pure (fmap f r, st'')
+        Zift $ \rd -> do
+            r <- iof rd
+            pure $ fmap f r
 
 -- | 'Zift' actions can be sequenced.
 --
@@ -70,51 +73,45 @@ instance Functor Zift where
 -- @(<*>)@ function. If any of the actions fails, the other is cancelled
 -- and the result fails.
 instance Applicative Zift where
-    pure a = Zift $ \_ st -> pure (pure a, st)
+    pure a = Zift $ \_ -> pure $ pure a
     (Zift faf) <*> (Zift af) =
-        Zift $ \zc st -> do
+        Zift $ \zc -> do
             let zc1 = zc {recursionList = L : recursionList zc}
                 zc2 = zc {recursionList = R : recursionList zc}
-            afaf <- async (faf zc1 mempty)
-            aaf <- async (af zc2 mempty)
+            afaf <- async $ faf zc1
+            aaf <- async $ af zc2
             efaa <- waitEither afaf aaf
-            let complete (fa, zs1) (a, zs2) = do
-                    let st' = st `mappend` zs1 `mappend` zs2
-                    st'' <- tryFlushZiftBuffer zc st'
-                    pure (fa <*> a, st'')
+            let complete fa a = pure $ fa <*> a
             case efaa of
-                Left t1@(far, zs1) ->
+                Left far ->
                     case far of
                         ZiftFailed s -> do
                             cancel aaf
-                            pure (ZiftFailed s, st `mappend` zs1)
+                            pure $ ZiftFailed s
                         _ -> do
                             t2 <- wait aaf
-                            complete t1 t2
-                Right t2@(ar, zs2) ->
+                            pure $ far <*> t2
+                Right ar ->
                     case ar of
                         ZiftFailed s -> do
                             cancel afaf
-                            pure (ZiftFailed s, st `mappend` zs2)
+                            pure $ ZiftFailed s
                         _ -> do
                             t1 <- wait afaf
-                            complete t1 t2
+                            pure $ t1 <*> ar
 
 -- | 'Zift' actions can be composed.
 instance Monad Zift where
     (Zift fa) >>= mb =
-        Zift $ \rd st -> do
-            let newlist =
-                    case recursionList rd of
-                        (M:_) -> recursionList rd -- don't add another one, it just takes up space.
-                        _ -> M : recursionList rd
-            (ra, st') <- fa (rd {recursionList = newlist}) st
-            st'' <- tryFlushZiftBuffer rd st'
+        Zift $ \rd -> do
+            let newlist = (L : recursionList rd)
+            ra <- fa (rd {recursionList = newlist})
             case ra of
                 ZiftSuccess a ->
                     case mb a of
-                        Zift pb -> pb rd st''
-                ZiftFailed e -> pure (ZiftFailed e, st'')
+                        Zift pb ->
+                            pb (rd {recursionList = R : recursionList rd})
+                ZiftFailed e -> pure (ZiftFailed e)
     fail = Fail.fail
 
 -- | A 'Zift' action can fail.
@@ -125,7 +122,7 @@ instance Monad Zift where
 -- The implementation uses the given string as the message that is shown at
 -- the very end of the run.
 instance MonadFail Zift where
-    fail s = Zift $ \_ st -> pure (ZiftFailed s, st)
+    fail s = Zift $ \_ -> pure (ZiftFailed s)
 
 -- | Any IO action can be part of a 'Zift' action.
 --
@@ -137,25 +134,26 @@ instance MonadFail Zift where
 -- The implementation also ensures that exceptions are caught.
 instance MonadIO Zift where
     liftIO act =
-        Zift $ \_ st ->
-            (act >>= (\r -> pure (ZiftSuccess r, st))) `catch` handler st
+        Zift $ \_ -> (act >>= (\r -> pure $ ZiftSuccess r)) `catch` handler
       where
-        handler :: ZiftState -> SomeException -> IO (ZiftResult a, ZiftState)
-        handler s ex = pure (ZiftFailed $ displayException ex, s)
+        handler :: SomeException -> IO (ZiftResult a)
+        handler ex = pure (ZiftFailed $ displayException ex)
 
 instance MonadThrow Zift where
-    throwM e = Zift $ \_ _ -> throwM e
+    throwM e = Zift $ \_ -> throwM e
 
 data ZiftResult a
     = ZiftSuccess a
     | ZiftFailed String
     deriving (Show, Eq, Generic)
 
-instance Validity a => Validity (ZiftResult a) where
+instance Validity a =>
+         Validity (ZiftResult a) where
     isValid (ZiftSuccess a) = isValid a
     isValid _ = True
 
-instance Monoid a => Monoid (ZiftResult a) where
+instance Monoid a =>
+         Monoid (ZiftResult a) where
     mempty = ZiftSuccess mempty
     mappend z1 z2 = mappend <$> z1 <*> z2
 
@@ -177,18 +175,76 @@ instance Monad ZiftResult where
 instance MonadFail ZiftResult where
     fail = ZiftFailed
 
--- | Internal: do not use yourself.
-tryFlushZiftBuffer :: ZiftContext -> ZiftState -> IO ZiftState
-tryFlushZiftBuffer ctx st =
-    if flushable $ recursionList ctx
-        then do
-            let zos = reverse $ bufferedOutput st
-                st' = st {bufferedOutput = []}
-            atomically $ mapM_ (writeTChan $ printChan ctx) zos
-            pure st'
-        else pure st
+getContext :: Zift ZiftContext
+getContext = Zift $ \zc -> pure $ ZiftSuccess zc
 
--- The buffer is flushable when it's guaranteed to be the first in the in-order
--- of the evaluation tree.
-flushable :: [LMR] -> Bool
-flushable = all (== M) . dropWhile (== L)
+addZiftOutput :: ZiftOutput -> Zift ()
+addZiftOutput zo =
+    Zift $ \zc -> do
+        atomically $
+            writeTChan (printChan zc) $
+            ZiftOutputMessage
+            { ziftOutputMessage = zo
+            , ziftOutputMessageOriginator = recursionList zc
+            }
+        pure mempty
+
+runZift :: ZiftContext -> Zift () -> IO ExitCode
+runZift ctx zfunc = do
+    let pchan = printChan ctx
+        sets = settings ctx
+    fmvar <- atomically newEmptyTMVar
+    printerAsync <- async (runZiftBookkeeper pchan)
+    runnerAsync <- async (runZiftRunner ctx)
+    result <- wait runnerAsync
+    wait printerAsync
+    pure result
+
+runZiftRunner :: TMVar () -> ZiftContext -> IO ()
+runZiftRunner fmvar ctx = do
+    let pchan = printChan ctx
+        sets = settings ctx
+    withSystemTempDir "zifter" $ \d ->
+        withCurrentDir d $ do
+            (r, zs) <- zift zfunc ctx mempty
+            result <-
+                case r of
+                    ZiftFailed err -> do
+                        atomically $
+                            writeTChan pchan $
+                            ZiftOutputMessage [] $
+                            ZiftOutput [SetColor Foreground Dull Red] err
+                        pure $ ExitFailure 1
+                    ZiftSuccess () -> pure ExitSuccess
+            atomically $ putTMVar fmvar ()
+            pure result
+
+runZiftBookkeeper :: TMVar () -> ZiftContext -> IO ()
+runZiftBookkeeper fmvar ctx = do
+    let pchan = printChan ctx
+        sets = settings ctx
+    let outputOne :: ZiftOutput -> IO ()
+        outputOne (ZiftOutput commands str) = do
+            let color = setsOutputColor sets
+            when color $ setSGR commands
+            putStr str
+            when color $ setSGR [Reset]
+            putStr "\n" -- Because otherwise it doesn't work?
+            hFlush stdout
+    let outputAll = do
+            mout <- atomically $ tryReadTChan pchan
+            case mout of
+                Nothing -> pure ()
+                Just output -> do
+                    outputOne $ ziftOutputMessage output
+                    outputAll
+    let printer = do
+            mdone <-
+                atomically $
+                (Left <$> takeTMVar fmvar) `orElse` (Right <$> readTChan pchan)
+            case mdone of
+                Left () -> outputAll
+                Right output -> do
+                    outputOne $ ziftOutputMessage output
+                    printer
+    printer
