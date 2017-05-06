@@ -7,6 +7,9 @@ license-file: LICENSE
 copyright: Copyright: (c) 2017 Tom Sydney Kerckhove
 maintainer: syd.kerckhove@gmail.com
 homepage: http://cs-syd.eu
+synopsis: zifter-google-java-format
+description:
+    zifter-google-java-format
 category: Zift
 author: Tom Sydney Kerckhove
 
