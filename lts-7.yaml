@@ -1,0 +1,18 @@
+flags: {}
+extra-package-dbs: []
+packages:
+- zifter
+- zifter-cabal
+- zifter-git
+- zifter-google-java-format
+- zifter-hindent
+- zifter-hlint
+- zifter-stack
+extra-deps:
+- genvalidity-0.3.1.0
+- genvalidity-hspec-0.3.0.0
+- genvalidity-path-0.1.0.2
+- validity-0.3.2.0
+- validity-path-0.1.0.0
+- optparse-applicative-0.13.2.0
+resolver: lts-7.20

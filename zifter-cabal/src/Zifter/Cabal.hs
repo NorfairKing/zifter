@@ -1,7 +1,6 @@
 module Zifter.Cabal where
 
 import Control.Monad.IO.Class
-import Data.Foldable
 import Path
 import Path.IO
 import System.Exit (ExitCode(..))
@@ -34,7 +33,7 @@ cabalFormat = do
     cabalFiles <-
         liftIO $
         (filter ((".cabal" ==) . fileExtension) . snd) <$> listDirRecur rd
-    for_ cabalFiles formatSingleCabalFile
+    forZ_ cabalFiles formatSingleCabalFile
 
 formatSingleCabalFile :: Path Abs File -> Zift ()
 formatSingleCabalFile cabalFile = do

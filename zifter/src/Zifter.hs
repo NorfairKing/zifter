@@ -14,13 +14,17 @@ module Zifter
     , prechecker
     , checker
     , ziftP
+    , mapZ
+    , mapZ_
+    , forZ
+    , forZ_
     , recursiveZift
-      -- ** Zift Script utilities
     , ZiftScript
     , renderZiftSetup
       -- * Defining your own zift actions
     , Zift
     , getRootDir
+    , getTmpDir
     , getSettings
     , getSetting
     , Settings(..)
@@ -116,10 +120,12 @@ runChecker ZiftSetup {..} = runZiftAuto $ \_ -> runAsChecker ziftChecker
 runZiftAuto :: (ZiftContext -> Zift ()) -> Settings -> IO ()
 runZiftAuto func sets = do
     rd <- autoRootDir
+    td <- resolveDir rd ".zifter"
     pchan <- newTChanIO
     let ctx =
             ZiftContext
             { rootdir = rd
+            , tmpdir = td
             , settings = sets
             , printChan = pchan
             , recursionList = []

@@ -49,9 +49,7 @@ recursiveZift = do
 recursively :: (Path Abs File -> Zift ()) -> Zift ()
 recursively func = do
     fs <- findZiftFilesRecursively
-    -- Do it in serial (for errors to show up nicely)
-    -- TODO make it possible to run them in parallel instead?
-    --      we might have to make it possible for zift to output something machine-readible instead.
+    -- In serial on purpose.
     forM_ fs func
 
 halfIndent :: String -> String
