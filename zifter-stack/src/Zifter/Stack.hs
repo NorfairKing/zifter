@@ -89,4 +89,9 @@ stackBuild = do
     forM_ tups $ \(package_, targets) -> do
         stack $ unwords ["clean", package_]
         forM_ targets $ \target ->
-            stack $ unwords ["build --pedantic --haddock --test", target]
+            stack $
+            unwords
+                [ "build --pedantic --haddock --test"
+                , target
+                , "--test-arguments='--fail-fast --seed=42'"
+                ]
