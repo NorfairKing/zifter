@@ -43,11 +43,12 @@ instance GenUnchecked SGR
 
 instance GenUnchecked LR
 
+instance GenUnchecked RecursionPath
+
 instance GenUnchecked ZiftOutput
 
 instance GenUnchecked a =>
-         GenUnchecked (ZiftResult a) where
-    genUnchecked = ZiftSuccess <$> genUnchecked
+         GenUnchecked (ZiftResult a)
 
 instance GenValid a =>
          GenValid (ZiftResult a) where
@@ -57,8 +58,7 @@ instance GenInvalid a =>
          GenInvalid (ZiftResult a) where
     genInvalid = ZiftSuccess <$> genInvalid
 
-instance GenUnchecked OutputBuffer where
-    genUnchecked = OutputBuffer <$> genUnchecked
+instance GenUnchecked OutputBuffer
+instance GenUnchecked OutputRecord
 
-instance GenUnchecked BookkeeperState where
-    genUnchecked = BookkeeperState <$> genUnchecked
+instance GenUnchecked BookkeeperState

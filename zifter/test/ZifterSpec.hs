@@ -29,6 +29,6 @@ spec =
                     { rootdir = rd
                     , settings = sets
                     , printChan = pchan
-                    , recursionList = []
+                    , recursionList = mempty
                     }
             runZift ctx (pure ()) `shouldReturn` ExitSuccess

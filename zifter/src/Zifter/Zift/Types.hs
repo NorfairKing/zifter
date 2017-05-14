@@ -12,6 +12,7 @@ module Zifter.Zift.Types
     , addZiftOutput
     , runZift
     , BookkeeperState(..)
+    , OutputRecord(..)
     , OutputBuffer(..)
     , initialBookkeeperState
     , advanceBookkeeperState
@@ -148,7 +149,7 @@ instance Monad Zift where
 -- The implementation uses the given string as the message that is shown at
 -- the very end of the run.
 instance MonadFail Zift where
-    fail s = Zift $ \_ -> pure (ZiftFailed s)
+    fail s = Zift $ \_ -> pure (ZiftFailed [s])
 
 -- | Any IO action can be part of a 'Zift' action.
 --
@@ -162,14 +163,14 @@ instance MonadIO Zift where
     liftIO act = Zift $ \_ -> (act >>= (pure . ZiftSuccess)) `catch` handler
       where
         handler :: SomeException -> IO (ZiftResult a)
-        handler ex = pure (ZiftFailed $ displayException ex)
+        handler ex = pure (ZiftFailed [displayException ex])
 
 instance MonadThrow Zift where
     throwM e = Zift $ \_ -> throwM e
 
 data ZiftResult a
     = ZiftSuccess a
-    | ZiftFailed String
+    | ZiftFailed [String]
     deriving (Show, Eq, Generic)
 
 instance Validity a =>
@@ -191,14 +192,14 @@ instance Applicative ZiftResult where
     (ZiftSuccess f) <*> (ZiftSuccess a) = ZiftSuccess $ f a
     (ZiftFailed e) <*> (ZiftSuccess _) = ZiftFailed e
     (ZiftSuccess _) <*> (ZiftFailed e) = ZiftFailed e
-    (ZiftFailed e1) <*> (ZiftFailed e2) = ZiftFailed $ unwords [e1, e2]
+    (ZiftFailed e1) <*> (ZiftFailed e2) = ZiftFailed $ e1 ++ e2
 
 instance Monad ZiftResult where
     (ZiftSuccess a) >>= fb = fb a
     (ZiftFailed e) >>= _ = ZiftFailed e
 
 instance MonadFail ZiftResult where
-    fail = ZiftFailed
+    fail s = ZiftFailed [s]
 
 getContext :: Zift ZiftContext
 getContext = Zift $ \zc -> pure $ ZiftSuccess zc
@@ -227,11 +228,12 @@ runZiftRunner fmvar ctx zfunc = do
             r <- zift zfunc ctx
             result <-
                 case r of
-                    ZiftFailed err -> do
+                    ZiftFailed errs -> do
                         atomically $
-                            writeTChan pchan $
-                            ZiftOutputMessage mempty $
-                            ZiftOutput [SetColor Foreground Dull Red] err
+                            forM_ errs $ \err ->
+                                writeTChan pchan $
+                                ZiftOutputMessage mempty $
+                                ZiftOutput [SetColor Foreground Dull Red] err
                         pure $ ExitFailure 1
                     ZiftSuccess () -> pure ExitSuccess
             atomically $ putTMVar fmvar ()
@@ -269,14 +271,26 @@ runZiftBookkeeper fmvar ctx = printer
                 outputOne output
                 printer
 
-data OutputBuffer
+newtype OutputBuffer =
+    OutputBuffer [ZiftOutput] -- In reverse order.
+    deriving (Show, Eq, Generic)
+
+instance Monoid OutputBuffer where
+    mempty = OutputBuffer []
+    mappend (OutputBuffer o1) (OutputBuffer o2) = OutputBuffer $ o2 ++ o1
+
+singletonBuffer :: ZiftOutput -> OutputBuffer
+singletonBuffer = OutputBuffer . (:[])
+
+
+data OutputRecord
     = Complete
-    | Incomplete [ZiftOutput] -- In reverse order.
-    deriving (Show, Eq)
+    | Incomplete OutputBuffer
+    deriving (Show, Eq, Generic)
 
 data BookkeeperState = BookkeeperState
-    { bufferedMessages :: Map RecursionPath OutputBuffer
-    } deriving (Show, Eq)
+    { bufferedMessages :: Map RecursionPath OutputRecord
+    } deriving (Show, Eq, Generic)
 
 initialBookkeeperState :: BookkeeperState
 initialBookkeeperState = BookkeeperState {bufferedMessages = M.empty}
@@ -285,4 +299,12 @@ advanceBookkeeperState
     :: BookkeeperState
     -> ZiftOutputMessage
     -> Maybe BookkeeperState -- Nothing means done.
-advanceBookkeeperState = undefined
+advanceBookkeeperState (BookkeeperState bm) om =
+    let continueWith :: Map RecursionPath OutputRecord -> Maybe BookkeeperState
+        continueWith = Just . BookkeeperState
+    in case om of
+           ZiftOutputMessage rp zo ->
+               let go :: Maybe OutputRecord -> Maybe OutputRecord
+                   go Nothing -- No record yet, that means we definitely need to keep the message.
+                    = Just (Incomplete (OutputBuffer [zo]))
+               in continueWith $ M.alter go rp bm
