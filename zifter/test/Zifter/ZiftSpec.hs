@@ -342,6 +342,9 @@ spec = do
                                 res <- readAllFrom $ printChan ctx
                                 res `shouldBe` reverse (bufferedOutput state)
                             else pure ()
+        describe "advanceBookkeeperState" $ do
+            it "terminates if the empty list is completed" $ do
+                advanceBookkeeperState initialBookkeeperState (Completionmessage (RecursionPath []))
 
 forAllCtx
     :: Testable (IO b)

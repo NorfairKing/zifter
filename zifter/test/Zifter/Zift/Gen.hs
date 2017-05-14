@@ -7,6 +7,7 @@ module Zifter.Zift.Gen where
 import GHC.Generics
 
 import Data.GenValidity
+import Data.GenValidity.Containers
 
 import System.Console.ANSI
 
@@ -44,8 +45,6 @@ instance GenUnchecked LR
 
 instance GenUnchecked ZiftOutput
 
-instance GenUnchecked ZiftState
-
 instance GenUnchecked a =>
          GenUnchecked (ZiftResult a) where
     genUnchecked = ZiftSuccess <$> genUnchecked
@@ -57,3 +56,9 @@ instance GenValid a =>
 instance GenInvalid a =>
          GenInvalid (ZiftResult a) where
     genInvalid = ZiftSuccess <$> genInvalid
+
+instance GenUnchecked OutputBuffer where
+    genUnchecked = OutputBuffer <$> genUnchecked
+
+instance GenUnchecked BookkeeperState where
+    genUnchecked = BookkeeperState <$> genUnchecked

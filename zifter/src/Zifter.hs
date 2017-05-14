@@ -121,7 +121,7 @@ runZiftAuto func sets = do
             { rootdir = rd
             , settings = sets
             , printChan = pchan
-            , recursionList = []
+            , recursionList = mempty
             }
     runZift ctx (func ctx) >>= exitWith
 

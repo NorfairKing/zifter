@@ -4,12 +4,17 @@ module Zifter.Zift.Types
     ( ZiftOutputMessage(..)
     , ZiftOutput(..)
     , ZiftContext(..)
-    , LR
+    , LR(..)
+    , RecursionPath(..)
     , Zift
     , ZiftResult(..)
     , getContext
     , addZiftOutput
     , runZift
+    , BookkeeperState(..)
+    , OutputBuffer(..)
+    , initialBookkeeperState
+    , advanceBookkeeperState
     ) where
 
 import Prelude
@@ -23,6 +28,8 @@ import Control.Monad
 import Control.Monad.Catch (MonadThrow(..))
 import Control.Monad.Fail as Fail
 import Control.Monad.IO.Class
+import Data.Map (Map)
+import qualified Data.Map as M
 import Data.Validity
 import Data.Validity.Path ()
 import GHC.Generics
@@ -34,10 +41,11 @@ import System.IO
 
 import Zifter.OptParse.Types
 
-data ZiftOutputMessage = ZiftOutputMessage
-    { ziftOutputMessageOriginator :: [LR]
-    , ziftOutputMessage :: ZiftOutput
-    } deriving (Show, Eq, Generic)
+data ZiftOutputMessage
+    = CompletionMessage RecursionPath
+    | ZiftOutputMessage RecursionPath
+                        ZiftOutput
+    deriving (Show, Eq, Generic)
 
 data ZiftOutput = ZiftOutput
     { outputColors :: [SGR]
@@ -48,13 +56,24 @@ data ZiftContext = ZiftContext
     { rootdir :: Path Abs Dir
     , settings :: Settings
     , printChan :: TChan ZiftOutputMessage -- The LR is in reverse order.
-    , recursionList :: [LR] -- In reverse order
+    , recursionList :: RecursionPath -- In reverse order
     } deriving (Generic)
 
 data LR
     = L
     | R
-    deriving (Show, Eq, Generic)
+    deriving (Show, Eq, Ord, Generic)
+
+newtype RecursionPath =
+    RecursionPath [LR] -- In reverse order
+    deriving (Show, Eq, Ord, Generic)
+
+instance Monoid RecursionPath where
+    mempty = RecursionPath []
+    mappend (RecursionPath r1) (RecursionPath r2) = RecursionPath (r2 ++ r1) -- Reverse on purpose
+
+recurse :: LR -> RecursionPath -> RecursionPath
+recurse e (RecursionPath ls) = RecursionPath (e : ls)
 
 instance Validity ZiftContext where
     isValid = isValid . rootdir
@@ -83,8 +102,8 @@ instance Applicative Zift where
     pure a = Zift $ \_ -> pure $ pure a
     (Zift faf) <*> (Zift af) =
         Zift $ \zc -> do
-            let zc1 = zc {recursionList = L : recursionList zc}
-                zc2 = zc {recursionList = R : recursionList zc}
+            let zc1 = zc {recursionList = recurse L $ recursionList zc}
+                zc2 = zc {recursionList = recurse R $ recursionList zc}
             afaf <- async $ faf zc1
             aaf <- async $ af zc2
             efaa <- waitEither afaf aaf
@@ -110,13 +129,14 @@ instance Applicative Zift where
 instance Monad Zift where
     (Zift fa) >>= mb =
         Zift $ \rd -> do
-            let newlist = L : recursionList rd
-            ra <- fa (rd {recursionList = newlist})
+            ra <- fa (rd {recursionList = recurse L $ recursionList rd})
             case ra of
                 ZiftSuccess a ->
                     case mb a of
                         Zift pb ->
-                            pb (rd {recursionList = R : recursionList rd})
+                            pb
+                                (rd
+                                 {recursionList = recurse R $ recursionList rd})
                 ZiftFailed e -> pure (ZiftFailed e)
     fail = Fail.fail
 
@@ -187,12 +207,7 @@ addZiftOutput :: ZiftOutput -> Zift ()
 addZiftOutput zo =
     Zift $ \zc -> do
         atomically $
-            writeTChan
-                (printChan zc)
-                ZiftOutputMessage
-                { ziftOutputMessage = zo
-                , ziftOutputMessageOriginator = recursionList zc
-                }
+            writeTChan (printChan zc) $ ZiftOutputMessage (recursionList zc) zo
         pure mempty
 
 runZift :: ZiftContext -> Zift () -> IO ExitCode
@@ -203,36 +218,6 @@ runZift ctx zfunc = do
     result <- wait runnerAsync
     wait printerAsync
     pure result
-
-runZiftBookkeeper :: TMVar () -> ZiftContext -> IO ()
-runZiftBookkeeper fmvar ctx = printer
-  where
-    pchan = printChan ctx
-    sets = settings ctx
-    outputOne :: ZiftOutput -> IO ()
-    outputOne (ZiftOutput commands str) = do
-        let color = setsOutputColor sets
-        when color $ setSGR commands
-        putStr str
-        when color $ setSGR [Reset]
-        putStr "\n" -- Because otherwise it doesn't work?
-        hFlush stdout
-    outputAll = do
-        mout <- atomically $ tryReadTChan pchan
-        case mout of
-            Nothing -> pure ()
-            Just output -> do
-                outputOne $ ziftOutputMessage output
-                outputAll
-    printer = do
-        mdone <-
-            atomically $
-            (Left <$> takeTMVar fmvar) `orElse` (Right <$> readTChan pchan)
-        case mdone of
-            Left () -> outputAll
-            Right output -> do
-                outputOne $ ziftOutputMessage output
-                printer
 
 runZiftRunner :: TMVar () -> ZiftContext -> Zift () -> IO ExitCode
 runZiftRunner fmvar ctx zfunc = do
@@ -245,9 +230,59 @@ runZiftRunner fmvar ctx zfunc = do
                     ZiftFailed err -> do
                         atomically $
                             writeTChan pchan $
-                            ZiftOutputMessage [] $
+                            ZiftOutputMessage mempty $
                             ZiftOutput [SetColor Foreground Dull Red] err
                         pure $ ExitFailure 1
                     ZiftSuccess () -> pure ExitSuccess
             atomically $ putTMVar fmvar ()
             pure result
+
+runZiftBookkeeper :: TMVar () -> ZiftContext -> IO ()
+runZiftBookkeeper fmvar ctx = printer
+  where
+    pchan = printChan ctx
+    sets = settings ctx
+    outputOne :: ZiftOutputMessage -> IO ()
+    outputOne (CompletionMessage (RecursionPath rp)) =
+        putStrLn $ unwords ["Complete:", show rp]
+    outputOne (ZiftOutputMessage (RecursionPath rp) (ZiftOutput commands str)) = do
+        let color = setsOutputColor sets
+        when color $ setSGR commands
+        putStr str
+        when color $ setSGR [Reset]
+        putStr "\n" -- Because otherwise it doesn't work?
+        hFlush stdout
+    outputAll = do
+        mout <- atomically $ tryReadTChan pchan
+        case mout of
+            Nothing -> pure ()
+            Just output -> do
+                outputOne output
+                outputAll
+    printer = do
+        mdone <-
+            atomically $
+            (Left <$> takeTMVar fmvar) `orElse` (Right <$> readTChan pchan)
+        case mdone of
+            Left () -> outputAll
+            Right output -> do
+                outputOne output
+                printer
+
+data OutputBuffer
+    = Complete
+    | Incomplete [ZiftOutput] -- In reverse order.
+    deriving (Show, Eq)
+
+data BookkeeperState = BookkeeperState
+    { bufferedMessages :: Map RecursionPath OutputBuffer
+    } deriving (Show, Eq)
+
+initialBookkeeperState :: BookkeeperState
+initialBookkeeperState = BookkeeperState {bufferedMessages = M.empty}
+
+advanceBookkeeperState
+    :: BookkeeperState
+    -> ZiftOutputMessage
+    -> Maybe BookkeeperState -- Nothing means done.
+advanceBookkeeperState = undefined
