@@ -19,6 +19,7 @@ module Zifter.Zift.Types
     , bufferToList
     , initialBookkeeperState
     , advanceBookkeeperState
+    , shouldFlush
     ) where
 
 import Prelude
@@ -292,8 +293,9 @@ bufferToList :: OutputBuffer -> [ZiftOutput]
 bufferToList (OutputBuffer zos) = reverse zos
 
 data OutputRecord
-    = Complete
+    = Complete OutputBuffer
     | Incomplete OutputBuffer
+    | Flushed
     deriving (Show, Eq, Ord, Generic)
 
 data BookkeeperState = BookkeeperState
@@ -306,36 +308,77 @@ initialBookkeeperState = BookkeeperState {bufferedMessages = M.empty}
 advanceBookkeeperState
     :: BookkeeperState
     -> ZiftOutputMessage
-    -> Maybe BookkeeperState -- Nothing means done.
+    -> Maybe (BookkeeperState, OutputBuffer) -- Nothing means done.
 advanceBookkeeperState (BookkeeperState bm) om =
-    let continueWith :: Map RecursionPath OutputRecord -> Maybe BookkeeperState
-        continueWith = Just . BookkeeperState
+    let continueWith :: Map RecursionPath OutputRecord
+                     -> Maybe (BookkeeperState, OutputBuffer)
+        continueWith bm = Just (BookkeeperState bm, mempty)
     in case om of
            ZiftOutputMessage rp zo ->
-               let go :: Maybe OutputRecord -> Maybe OutputRecord
-                   go Nothing -- No record yet, that means we definitely need to keep the message.
-                    = Just (Incomplete $ singletonBuffer zo)
-                   go (Just or) -- There is a record already
-                    =
+               case M.lookup rp bm of
+                   Nothing -- No record
+                    ->
+                       continueWith $
+                       M.insert rp (Incomplete $ singletonBuffer zo) bm
+                   Just or -- There is a record already
+                    ->
                        case or of
-                           Complete -- The record states that this path is already complete.
-                                    -- This should never happen, but if it does' we will just discard the message.
-                            -> Just Complete
+                           Complete b -- The record states that this path is already complete.
+                                    -- This should never happen, but if it does' we will just add the message to the buffer anyway, because it has not been flushed yet.
+                            ->
+                               continueWith $
+                               M.insert
+                                   rp
+                                   (Complete $ b `mappend` singletonBuffer zo)
+                                   bm
                            Incomplete ob -- The record states that this path is incomplete.
                                          -- We just add to the buffer.
                             ->
-                               Just
+                               continueWith $
+                               M.insert
+                                   rp
                                    (Incomplete $ ob `mappend` singletonBuffer zo)
-               in continueWith $ M.alter go rp bm
+                                   bm
+                           Flushed -- The record states that this path is already flushed.
+                                      -- This should never happen, but it is not a problem.
+                                      -- In this case we just discard the message and leave the record 'Flushed'.
+                            -> continueWith bm
            CompletionMessage rp ->
-               let go :: Maybe OutputRecord -> Maybe OutputRecord
-                   go Nothing -- No record yet, that means no output, but still a completion
-                    = Just Complete
-                   go (Just r) =
+               case M.lookup rp bm of
+                   Nothing -- No record yet. This message completes the path.
+                    -> continueWith $ M.insert rp (Complete mempty) bm
+                   Just r ->
                        case r of
-                           Complete -- The record is states that this path is already complete.
-                             -- This should never happen, but if it does, we will just leave it completed.
-                            -> Just Complete
                            Incomplete ob -- The record states that this path is incomplete, then this message completes it.
-                            -> Just Complete -- TODO flush the buffer to std out somehow
-               in continueWith $ M.alter go rp bm
+                            ->
+                               Just $
+                               if shouldFlush (BookkeeperState bm) rp
+                                   then ( BookkeeperState $
+                                          M.insert rp Flushed bm
+                                        , ob)
+                                   else ( BookkeeperState $
+                                          M.insert rp (Complete ob) bm
+                                        , mempty)
+                           Complete ob -- The record is states that this path is already complete.
+                             -- This should never happen, but if it does, we will just leave it completed.
+                            -> continueWith bm
+                           Flushed -- The record states that this path is already flushed.
+                                      -- This should never happen, but it is not a problem.
+                                      -- We just leave the record 'Flushed'.
+                            -> continueWith bm
+
+-- Returns true if the buffer should be flushed upon receiving a completion message.
+-- Also returns true for any path that should already have been flushed.
+shouldFlush :: BookkeeperState -> RecursionPath -> Bool
+shouldFlush bs@(BookkeeperState bm) (RecursionPath rp) =
+    case rp of
+        [] -> True
+        (L:rest) ->
+            shouldFlush bs $ RecursionPath rest
+        (R:rest) ->
+            case M.lookup (RecursionPath (L : rest)) bm of
+                Nothing -> False
+                Just or ->
+                    case or of
+                        Flushed -> True
+                        _ -> False

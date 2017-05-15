@@ -36,65 +36,142 @@ spec = do
         monoidSpec @(ZiftResult String)
     describe "advanceBookkeeperState" $ do
         it
-            "keep strack of any first message as an incomplete buffer, and does not stop" $ do
+            "keep strack of any first message as an incomplete buffer, and does not stop or output" $ do
             forAll genUnchecked $ \rp ->
                 forAll genUnchecked $ \zo ->
                     advanceBookkeeperState
                         initialBookkeeperState
                         (ZiftOutputMessage rp zo) `shouldBe`
                     Just
-                        (BookkeeperState
-                             (M.fromList [(rp, Incomplete $ singletonBuffer zo)]))
+                        ( BookkeeperState
+                              (M.fromList
+                                   [(rp, Incomplete $ singletonBuffer zo)])
+                        , mempty)
+        let runOn
+                :: BookkeeperState
+                -> [ZiftOutputMessage]
+                -> Maybe (BookkeeperState, OutputBuffer)
+            runOn start = foldl' go (Just (start, mempty))
+              where
+                go
+                    :: Maybe (BookkeeperState, OutputBuffer)
+                    -> ZiftOutputMessage
+                    -> Maybe (BookkeeperState, OutputBuffer)
+                go mst m = do
+                    (st, b) <- mst
+                    (st', b') <- advanceBookkeeperState st m
+                    pure (st', b `mappend` b')
         it
-            "keep strack of any non-zero number of messages on the same path as an incomplete buffer, and does not stop" $ do
+            "keep strack of any non-zero number of messages on the same path as an incomplete buffer, and does not stop or output" $ do
             forAll genUnchecked $ \rp ->
                 forAll (genUnchecked `suchThat` (not . null)) $ \zos ->
-                    foldM
-                        advanceBookkeeperState
+                    runOn
                         initialBookkeeperState
                         (map (ZiftOutputMessage rp) zos) `shouldBe`
                     Just
-                        (BookkeeperState
-                             (M.fromList [(rp, Incomplete $ bufferOf zos)]))
+                        ( BookkeeperState
+                              (M.fromList [(rp, Incomplete $ bufferOf zos)])
+                        , mempty)
         it
-            "halts prematurely if at any point we get an output after having completed a path" $ do
-            forAll genUnchecked $ \bs ->
-                forAll genUnchecked $ \rp ->
-                    forAll genUnchecked $ \zo ->
-                        let mres =
-                                foldM
-                                    advanceBookkeeperState
-                                    bs
-                                    [ CompletionMessage rp
-                                    , ZiftOutputMessage rp zo
-                                    ]
-                        in case mres of
+            "flushes any output on a path with only L's immediately on completion." $ do
+            forAll genUnchecked $ \rp ->
+                forAll genUnchecked $ \mob ->
+                    forAll genUnchecked $ \(BookkeeperState bs') ->
+                        let (bs, obs) =
+                                case mob of
+                                    Nothing ->
+                                        ( BookkeeperState $ M.delete rp bs'
+                                        , mempty -- Either there was no record yet
+                                         )
+                                    Just obs ->
+                                        ( BookkeeperState $
+                                          M.insert rp (Incomplete obs) bs'
+                                        , obs -- Or there was, but it was incomplete
+                                         )
+                            mr =
+                                advanceBookkeeperState bs (CompletionMessage rp)
+                        in case mr of
                                Nothing ->
-                                   expectationFailure "should not have halted."
-                               Just (BookkeeperState res) ->
-                                   M.lookup rp res `shouldBe` Just Complete
-        it "completes an output record when a completion message is sent" $ do
+                                   expectationFailure "Should not halt yet."
+                               Just (BookkeeperState bs, os) -> do
+                                   os `shouldBe` obs
+                                   M.lookup rp bs `shouldBe` Just Flushed
+    describe "shouldFlush" $ do
+        it "is always true for all (== L) paths" $ do
             forAll genUnchecked $ \bs ->
-                forAll genUnchecked $ \rp ->
-                    let mres = advanceBookkeeperState bs (CompletionMessage rp)
-                    in case mres of
-                           Nothing ->
-                               expectationFailure "should not have halted."
-                           Just (BookkeeperState res) ->
-                               M.lookup rp res `shouldBe` Just Complete
-        it "leaves a path completed if it was completed already" $
+                forAll (genListOf $ pure L) $ \ls ->
+                    let rp = RecursionPath ls
+                    in shouldFlush bs rp `shouldBe` True
+        it "is always true for the empty recursion path (the last one)" $ do
             forAll genUnchecked $ \bs ->
-                forAll genUnchecked $ \rp ->
-                    let mres =
-                            foldM
-                                advanceBookkeeperState
-                                bs
-                                [CompletionMessage rp, CompletionMessage rp]
-                    in case mres of
-                           Nothing ->
-                               expectationFailure "should not have halted."
-                           Just (BookkeeperState res) ->
-                               M.lookup rp res `shouldBe` Just Complete
+                shouldFlush bs (RecursionPath []) `shouldBe` True
+        it
+            "is not true in this simple case for the right-hand side of a single split" $ do
+            forAll genUnchecked $ \ob ->
+                shouldFlush
+                    (BookkeeperState $
+                     M.fromList [(RecursionPath [L], Incomplete ob)])
+                    (RecursionPath [R]) `shouldBe`
+                False
+        it
+            "is not true in this simple case for the left-hand side of second split" $ do
+            forAll genUnchecked $ \ob1 ->
+                forAll genUnchecked $ \ob2 ->
+                    shouldFlush
+                        (BookkeeperState $
+                         M.fromList
+                             [ (RecursionPath [L, L], Incomplete ob1)
+                             , (RecursionPath [L, R], Incomplete ob2)
+                             ])
+                        (RecursionPath [R, L]) `shouldBe`
+                    False
+        -- let isComplete :: OutputRecord -> Bool
+        --     isComplete (Complete _) = True
+        --     isComplete Flushed = True
+        --     isComplete _ = False
+        -- it "Leaves a record completed if it gets a message after completion" $
+        --     forAll genUnchecked $ \bs ->
+        --         forAll genUnchecked $ \rp ->
+        --             forAll genUnchecked $ \zo ->
+        --                 let mres =
+        --                         foldM
+        --                             advanceBookkeeperState
+        --                             bs
+        --                             [ CompletionMessage rp
+        --                             , ZiftOutputMessage rp zo
+        --                             ]
+        --                 in case mres of
+        --                        Nothing ->
+        --                            expectationFailure "should not have halted."
+        --                        Just (BookkeeperState res) ->
+        --                            isComplete <$>
+        --                            M.lookup rp res `shouldBe` Just True
+        -- it "completes an output record when a completion message is sent" $
+        --     forAll genUnchecked $ \bs ->
+        --         forAll genUnchecked $ \rp ->
+        --             let mres = advanceBookkeeperState bs (CompletionMessage rp)
+        --             in case mres of
+        --                    Nothing ->
+        --                        expectationFailure "should not have halted."
+        --                    Just (BookkeeperState res) ->
+        --                        isComplete <$>
+        --                        M.lookup rp res `shouldBe` Just True
+        -- it "leaves a path completed if it was completed already but not flushed" $
+        --     forAll genUnchecked $ \bs ->
+        --         forAll genUnchecked $ \rp ->
+        --             let mres =
+        --                     foldM
+        --                         advanceBookkeeperState
+        --                         bs
+        --                         [CompletionMessage rp, CompletionMessage rp]
+        --             in case mres of
+        --                    Nothing ->
+        --                        expectationFailure "should not have halted."
+        --                    Just (BookkeeperState res) ->
+        --                        isComplete <$>
+        --                        M.lookup rp res `shouldBe` Just True
+        -- it "leaves a path flushed if any new messages arrive after flushing" $
+        --     True
         -- monadSpec @ZiftResult -- It's not a real monad, but close enough.
     -- describe "Zift" $ do
     --     describe "Monoid Zift" $ do
