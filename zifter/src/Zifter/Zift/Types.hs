@@ -14,6 +14,9 @@ module Zifter.Zift.Types
     , BookkeeperState(..)
     , OutputRecord(..)
     , OutputBuffer(..)
+    , singletonBuffer
+    , bufferOf
+    , bufferToList
     , initialBookkeeperState
     , advanceBookkeeperState
     ) where
@@ -51,7 +54,7 @@ data ZiftOutputMessage
 data ZiftOutput = ZiftOutput
     { outputColors :: [SGR]
     , outputMessage :: String
-    } deriving (Show, Eq, Generic)
+    } deriving (Show, Eq, Ord, Generic)
 
 data ZiftContext = ZiftContext
     { rootdir :: Path Abs Dir
@@ -273,20 +276,25 @@ runZiftBookkeeper fmvar ctx = printer
 
 newtype OutputBuffer =
     OutputBuffer [ZiftOutput] -- In reverse order.
-    deriving (Show, Eq, Generic)
+    deriving (Show, Eq, Ord, Generic)
 
 instance Monoid OutputBuffer where
     mempty = OutputBuffer []
     mappend (OutputBuffer o1) (OutputBuffer o2) = OutputBuffer $ o2 ++ o1
 
 singletonBuffer :: ZiftOutput -> OutputBuffer
-singletonBuffer = OutputBuffer . (:[])
+singletonBuffer = OutputBuffer . (: [])
 
+bufferOf :: [ZiftOutput] -> OutputBuffer
+bufferOf = OutputBuffer . reverse
+
+bufferToList :: OutputBuffer -> [ZiftOutput]
+bufferToList (OutputBuffer zos) = reverse zos
 
 data OutputRecord
     = Complete
     | Incomplete OutputBuffer
-    deriving (Show, Eq, Generic)
+    deriving (Show, Eq, Ord, Generic)
 
 data BookkeeperState = BookkeeperState
     { bufferedMessages :: Map RecursionPath OutputRecord
@@ -306,5 +314,28 @@ advanceBookkeeperState (BookkeeperState bm) om =
            ZiftOutputMessage rp zo ->
                let go :: Maybe OutputRecord -> Maybe OutputRecord
                    go Nothing -- No record yet, that means we definitely need to keep the message.
-                    = Just (Incomplete (OutputBuffer [zo]))
+                    = Just (Incomplete $ singletonBuffer zo)
+                   go (Just or) -- There is a record already
+                    =
+                       case or of
+                           Complete -- The record states that this path is already complete.
+                                    -- This should never happen, but if it does' we will just discard the message.
+                            -> Just Complete
+                           Incomplete ob -- The record states that this path is incomplete.
+                                         -- We just add to the buffer.
+                            ->
+                               Just
+                                   (Incomplete $ ob `mappend` singletonBuffer zo)
+               in continueWith $ M.alter go rp bm
+           CompletionMessage rp ->
+               let go :: Maybe OutputRecord -> Maybe OutputRecord
+                   go Nothing -- No record yet, that means no output, but still a completion
+                    = Just Complete
+                   go (Just r) =
+                       case r of
+                           Complete -- The record is states that this path is already complete.
+                             -- This should never happen, but if it does, we will just leave it completed.
+                            -> Just Complete
+                           Incomplete ob -- The record states that this path is incomplete, then this message completes it.
+                            -> Just Complete -- TODO flush the buffer to std out somehow
                in continueWith $ M.alter go rp bm

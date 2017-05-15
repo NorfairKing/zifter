@@ -44,7 +44,7 @@ spec = do
                         (ZiftOutputMessage rp zo) `shouldBe`
                     Just
                         (BookkeeperState
-                             (M.fromList [(rp, Incomplete $ OutputBuffer [zo])]))
+                             (M.fromList [(rp, Incomplete $ singletonBuffer zo)]))
         it
             "keep strack of any non-zero number of messages on the same path as an incomplete buffer, and does not stop" $ do
             forAll genUnchecked $ \rp ->
@@ -55,10 +55,46 @@ spec = do
                         (map (ZiftOutputMessage rp) zos) `shouldBe`
                     Just
                         (BookkeeperState
-                             (M.fromList
-                                  [ ( rp
-                                    , Incomplete $ OutputBuffer $ reverse zos)
-                                  ]))
+                             (M.fromList [(rp, Incomplete $ bufferOf zos)]))
+        it
+            "halts prematurely if at any point we get an output after having completed a path" $ do
+            forAll genUnchecked $ \bs ->
+                forAll genUnchecked $ \rp ->
+                    forAll genUnchecked $ \zo ->
+                        let mres =
+                                foldM
+                                    advanceBookkeeperState
+                                    bs
+                                    [ CompletionMessage rp
+                                    , ZiftOutputMessage rp zo
+                                    ]
+                        in case mres of
+                               Nothing ->
+                                   expectationFailure "should not have halted."
+                               Just (BookkeeperState res) ->
+                                   M.lookup rp res `shouldBe` Just Complete
+        it "completes an output record when a completion message is sent" $ do
+            forAll genUnchecked $ \bs ->
+                forAll genUnchecked $ \rp ->
+                    let mres = advanceBookkeeperState bs (CompletionMessage rp)
+                    in case mres of
+                           Nothing ->
+                               expectationFailure "should not have halted."
+                           Just (BookkeeperState res) ->
+                               M.lookup rp res `shouldBe` Just Complete
+        it "leaves a path completed if it was completed already" $
+            forAll genUnchecked $ \bs ->
+                forAll genUnchecked $ \rp ->
+                    let mres =
+                            foldM
+                                advanceBookkeeperState
+                                bs
+                                [CompletionMessage rp, CompletionMessage rp]
+                    in case mres of
+                           Nothing ->
+                               expectationFailure "should not have halted."
+                           Just (BookkeeperState res) ->
+                               M.lookup rp res `shouldBe` Just Complete
         -- monadSpec @ZiftResult -- It's not a real monad, but close enough.
     -- describe "Zift" $ do
     --     describe "Monoid Zift" $ do
