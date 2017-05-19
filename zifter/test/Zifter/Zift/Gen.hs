@@ -59,6 +59,7 @@ instance GenInvalid a =>
     genInvalid = ZiftSuccess <$> genInvalid
 
 instance GenUnchecked OutputBuffer
+
 instance GenUnchecked OutputRecord
 
 instance GenUnchecked BookkeeperState

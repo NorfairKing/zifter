@@ -96,7 +96,9 @@ instance Functor Zift where
     fmap f (Zift iof) =
         Zift $ \rd -> do
             r <- iof rd
-            pure $ fmap f r
+            let rs = fmap f r
+            sendMessage rd (CompletionMessage $ recursionList rd)
+            pure rs
 
 -- | 'Zift' actions can be sequenced.
 --
@@ -112,37 +114,45 @@ instance Applicative Zift where
             afaf <- async $ faf zc1
             aaf <- async $ af zc2
             efaa <- waitEither afaf aaf
-            case efaa of
-                Left far ->
-                    case far of
-                        ZiftFailed s -> do
-                            cancel aaf
-                            pure $ ZiftFailed s
-                        _ -> do
-                            t2 <- wait aaf
-                            pure $ far <*> t2
-                Right ar ->
-                    case ar of
-                        ZiftFailed s -> do
-                            cancel afaf
-                            pure $ ZiftFailed s
-                        _ -> do
-                            t1 <- wait afaf
-                            pure $ t1 <*> ar
+            r <-
+                case efaa of
+                    Left far ->
+                        case far of
+                            ZiftFailed s -> do
+                                cancel aaf
+                                pure $ ZiftFailed s
+                            _ -> do
+                                t2 <- wait aaf
+                                pure $ far <*> t2
+                    Right ar ->
+                        case ar of
+                            ZiftFailed s -> do
+                                cancel afaf
+                                pure $ ZiftFailed s
+                            _ -> do
+                                t1 <- wait afaf
+                                pure $ t1 <*> ar
+            sendMessage zc (CompletionMessage $ recursionList zc)
+            pure r
 
 -- | 'Zift' actions can be composed.
 instance Monad Zift where
     (Zift fa) >>= mb =
         Zift $ \rd -> do
             ra <- fa (rd {recursionList = recurse L $ recursionList rd})
-            case ra of
-                ZiftSuccess a ->
-                    case mb a of
-                        Zift pb ->
-                            pb
-                                (rd
-                                 {recursionList = recurse R $ recursionList rd})
-                ZiftFailed e -> pure (ZiftFailed e)
+            r <-
+                case ra of
+                    ZiftSuccess a ->
+                        case mb a of
+                            Zift pb ->
+                                pb
+                                    (rd
+                                     { recursionList =
+                                           recurse R $ recursionList rd
+                                     })
+                    ZiftFailed e -> pure (ZiftFailed e)
+            sendMessage rd (CompletionMessage $ recursionList rd)
+            pure r
     fail = Fail.fail
 
 -- | A 'Zift' action can fail.
@@ -164,7 +174,11 @@ instance MonadFail Zift where
 --
 -- The implementation also ensures that exceptions are caught.
 instance MonadIO Zift where
-    liftIO act = Zift $ \_ -> (act >>= (pure . ZiftSuccess)) `catch` handler
+    liftIO act =
+        Zift $ \rd -> do
+            res <- (act >>= (pure . ZiftSuccess)) `catch` handler
+            sendMessage rd (CompletionMessage $ recursionList rd)
+            pure res
       where
         handler :: SomeException -> IO (ZiftResult a)
         handler ex = pure (ZiftFailed [displayException ex])
@@ -211,9 +225,11 @@ getContext = Zift $ \zc -> pure $ ZiftSuccess zc
 addZiftOutput :: ZiftOutput -> Zift ()
 addZiftOutput zo =
     Zift $ \zc -> do
-        atomically $
-            writeTChan (printChan zc) $ ZiftOutputMessage (recursionList zc) zo
+        sendMessage zc $ ZiftOutputMessage (recursionList zc) zo
         pure mempty
+
+sendMessage :: ZiftContext -> ZiftOutputMessage -> IO ()
+sendMessage zc zom = atomically $ writeTChan (printChan zc) zom
 
 runZift :: ZiftContext -> Zift () -> IO ExitCode
 runZift ctx zfunc = do
@@ -248,32 +264,38 @@ runZiftBookkeeper fmvar ctx = printer
   where
     pchan = printChan ctx
     sets = settings ctx
-    outputOne :: ZiftOutputMessage -> IO ()
-    outputOne (CompletionMessage (RecursionPath rp)) =
-        putStrLn $ unwords ["Complete:", show rp]
-    outputOne (ZiftOutputMessage (RecursionPath rp) (ZiftOutput commands str)) = do
+    outputOne :: ZiftOutput -> IO ()
+    outputOne (ZiftOutput commands str) = do
         let color = setsOutputColor sets
         when color $ setSGR commands
         putStr str
         when color $ setSGR [Reset]
         putStr "\n" -- Because otherwise it doesn't work?
         hFlush stdout
-    outputAll = do
-        mout <- atomically $ tryReadTChan pchan
-        case mout of
-            Nothing -> pure ()
-            Just output -> do
-                outputOne output
-                outputAll
-    printer = do
-        mdone <-
-            atomically $
-            (Left <$> takeTMVar fmvar) `orElse` (Right <$> readTChan pchan)
-        case mdone of
-            Left () -> outputAll
-            Right output -> do
-                outputOne output
-                printer
+    -- outputAll = do
+    --     mout <- atomically $ tryReadTChan pchan
+    --     case mout of
+    --         Nothing -> pure ()
+    --         Just output -> do
+    --             outputOne output
+    --             outputAll
+    printer = go initialBookkeeperState
+      where
+        go :: BookkeeperState -> IO ()
+        go bs = do
+            mdone <-
+                atomically $
+                (Left <$> takeTMVar fmvar) `orElse` (Right <$> readTChan pchan)
+            case mdone of
+                Left () -> pure () -- outputAll
+                Right output -> do
+                    case advanceBookkeeperState bs output of
+                        Nothing -> pure ()
+                        Just (bs', buf) -> do
+                            mapM_ outputOne $ bufferToList buf
+                            -- print buf
+                            -- print bs'
+                            go bs'
 
 newtype OutputBuffer =
     OutputBuffer [ZiftOutput] -- In reverse order.
@@ -312,7 +334,7 @@ advanceBookkeeperState
 advanceBookkeeperState (BookkeeperState bm) om =
     let continueWith :: Map RecursionPath OutputRecord
                      -> Maybe (BookkeeperState, OutputBuffer)
-        continueWith bm = Just (BookkeeperState bm, mempty)
+        continueWith bm' = Just (BookkeeperState bm', mempty)
     in case om of
            ZiftOutputMessage rp zo ->
                case M.lookup rp bm of
@@ -346,7 +368,10 @@ advanceBookkeeperState (BookkeeperState bm) om =
            CompletionMessage rp ->
                case M.lookup rp bm of
                    Nothing -- No record yet. This message completes the path.
-                    -> continueWith $ M.insert rp (Complete mempty) bm
+                    ->
+                       if shouldFlush (BookkeeperState bm) rp
+                           then continueWith $ M.insert rp Flushed bm
+                           else continueWith $ M.insert rp (Complete mempty) bm
                    Just r ->
                        case r of
                            Incomplete ob -- The record states that this path is incomplete, then this message completes it.
@@ -373,8 +398,7 @@ shouldFlush :: BookkeeperState -> RecursionPath -> Bool
 shouldFlush bs@(BookkeeperState bm) (RecursionPath rp) =
     case rp of
         [] -> True
-        (L:rest) ->
-            shouldFlush bs $ RecursionPath rest
+        (L:rest) -> shouldFlush bs $ RecursionPath rest
         (R:rest) ->
             case M.lookup (RecursionPath (L : rest)) bm of
                 Nothing -> False

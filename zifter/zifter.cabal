@@ -57,7 +57,7 @@ test-suite zifter-test
         genvalidity-hspec >=0.3 && <0.4,
         genvalidity-path >=0.1 && <0.2,
         genvalidity-containers >=0.2 && <0.3,
-        containers,
+        containers -any,
         hspec -any,
         path -any,
         path-io -any,

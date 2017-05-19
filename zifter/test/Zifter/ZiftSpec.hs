@@ -74,7 +74,7 @@ spec = do
                         , mempty)
         it
             "flushes any output on a path with only L's immediately on completion." $ do
-            forAll genUnchecked $ \rp ->
+            forAll (RecursionPath <$> (genListOf $ pure L)) $ \rp ->
                 forAll genUnchecked $ \mob ->
                     forAll genUnchecked $ \(BookkeeperState bs') ->
                         let (bs, obs) =
