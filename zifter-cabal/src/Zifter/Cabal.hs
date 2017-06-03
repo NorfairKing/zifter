@@ -3,7 +3,9 @@ module Zifter.Cabal where
 import Control.Monad.IO.Class
 import Path
 import Path.IO
+import Safe
 import System.Exit (ExitCode(..))
+import qualified System.FilePath as FP (splitPath)
 import System.IO (hGetContents)
 import System.Process
 
@@ -32,7 +34,8 @@ cabalFormat = do
     rd <- getRootDir
     cabalFiles <-
         liftIO $
-        (filter ((".cabal" ==) . fileExtension) . snd) <$> listDirRecur rd
+        (filter (not . hidden) . filter ((".cabal" ==) . fileExtension) . snd) <$>
+        listDirRecur rd
     forZ_ cabalFiles formatSingleCabalFile
 
 formatSingleCabalFile :: Path Abs File -> Zift ()
@@ -47,3 +50,6 @@ formatSingleCabalFile cabalFile = do
         ExitSuccess ->
             printPreprocessingDone $
             unwords ["Formatted cabal file:", toFilePath cabalFile]
+
+hidden :: Path Abs t -> Bool
+hidden = any ((Just '.' ==) . headMay) . FP.splitPath . toFilePath

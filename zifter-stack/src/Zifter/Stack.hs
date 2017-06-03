@@ -5,7 +5,9 @@ import Control.Monad.IO.Class
 import Data.List (isInfixOf)
 import Path
 import Path.IO
+import Safe
 import System.Exit (ExitCode(..))
+import qualified System.FilePath as FP (splitPath)
 import System.IO
 import System.Process
 
@@ -41,7 +43,7 @@ stackGetPackageTargetTuples = do
     (_, fs) <- liftIO $ listDirRecur rd
     let cabalFiles =
             filter (not . isInfixOf ".stack-work" . toFilePath) $
-            filter ((== ".cabal") . fileExtension) fs
+            filter (not . hidden) $ filter ((== ".cabal") . fileExtension) fs
     (concat <$>) $
         forM cabalFiles $ \cabalFile -> do
             pd <-
@@ -95,3 +97,6 @@ stackBuild = do
                 , target
                 , "--test-arguments='--fail-fast --seed=42'"
                 ]
+
+hidden :: Path Abs t -> Bool
+hidden = any ((Just '.' ==) . headMay) . FP.splitPath . toFilePath
