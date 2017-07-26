@@ -24,11 +24,11 @@ module Zifter.Zift.Types
 
 import Prelude
 
-import Control.Concurrent.Async (waitEither, wait, cancel, async)
+import Control.Concurrent.Async (async, cancel, wait, waitEither)
 import Control.Concurrent.STM
-       (TChan, writeTChan, atomically, TMVar, readTChan, orElse, putTMVar,
-        newEmptyTMVar, takeTMVar, tryReadTChan)
-import Control.Exception (SomeException, displayException, catch)
+       (TChan, TMVar, atomically, newEmptyTMVar, orElse, putTMVar,
+        readTChan, takeTMVar, tryReadTChan, writeTChan)
+import Control.Exception (SomeException, catch, displayException)
 import Control.Monad
 import Control.Monad.Catch (MonadThrow(..))
 import Control.Monad.Fail as Fail
@@ -71,7 +71,21 @@ data LR
 
 newtype RecursionPath =
     RecursionPath [LR] -- In reverse order
-    deriving (Show, Eq, Ord, Generic)
+    deriving (Show, Eq, Generic)
+
+instance Ord RecursionPath where
+    compare (RecursionPath []) (RecursionPath []) = EQ
+    compare (RecursionPath xs) (RecursionPath []) =
+        if last xs == L
+            then LT
+            else GT
+    compare (RecursionPath xs') (RecursionPath ys') =
+        let xs = reverse xs'
+            ys = reverse ys'
+            go (a:as) (b:bs) = case compare a b of
+                EQ -> go as bs
+                x -> x
+        in go xs ys
 
 instance Monoid RecursionPath where
     mempty = RecursionPath []
@@ -87,8 +101,7 @@ newtype Zift a = Zift
     { zift :: ZiftContext -> IO (ZiftResult a)
     } deriving (Generic)
 
-instance Monoid a =>
-         Monoid (Zift a) where
+instance Monoid a => Monoid (Zift a) where
     mempty = Zift $ \_ -> pure mempty
     mappend z1 z2 = mappend <$> z1 <*> z2
 
@@ -191,13 +204,11 @@ data ZiftResult a
     | ZiftFailed [String]
     deriving (Show, Eq, Generic)
 
-instance Validity a =>
-         Validity (ZiftResult a) where
+instance Validity a => Validity (ZiftResult a) where
     isValid (ZiftSuccess a) = isValid a
     isValid _ = True
 
-instance Monoid a =>
-         Monoid (ZiftResult a) where
+instance Monoid a => Monoid (ZiftResult a) where
     mempty = ZiftSuccess mempty
     mappend z1 z2 = mappend <$> z1 <*> z2
 
@@ -327,13 +338,14 @@ data BookkeeperState = BookkeeperState
 initialBookkeeperState :: BookkeeperState
 initialBookkeeperState = BookkeeperState {bufferedMessages = M.empty}
 
-advanceBookkeeperState
-    :: BookkeeperState
+advanceBookkeeperState ::
+       BookkeeperState
     -> ZiftOutputMessage
-    -> Maybe (BookkeeperState, OutputBuffer) -- Nothing means done.
+    -> Maybe (BookkeeperState, Maybe OutputBuffer) -- Nothing means done.
 advanceBookkeeperState (BookkeeperState bm) om =
-    let continueWith :: Map RecursionPath OutputRecord
-                     -> Maybe (BookkeeperState, OutputBuffer)
+    let continueWith ::
+               Map RecursionPath OutputRecord
+            -> Maybe (BookkeeperState, OutputBuffer)
         continueWith bm' = Just (BookkeeperState bm', mempty)
     in case om of
            ZiftOutputMessage rp zo ->
