@@ -4,9 +4,9 @@ module Zifter.Zift.Types where
 
 import Prelude
 
-import Control.Concurrent.Async (waitEither, wait, cancel, async)
-import Control.Concurrent.STM (TChan, writeTChan, atomically)
-import Control.Exception (SomeException, displayException, catch)
+import Control.Concurrent.Async (async, cancel, wait, waitEither)
+import Control.Concurrent.STM (TChan, atomically, writeTChan)
+import Control.Exception (SomeException, catch, displayException)
 import Control.Monad.Catch (MonadThrow(..))
 import Control.Monad.Fail as Fail
 import Control.Monad.IO.Class
