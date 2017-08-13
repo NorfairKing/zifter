@@ -50,21 +50,21 @@ module Zifter
 
 import Control.Concurrent.Async (async, wait)
 import Control.Concurrent.STM
-       (newTChanIO, tryReadTChan, readTChan, writeTChan, atomically,
-        orElse, takeTMVar, putTMVar, newEmptyTMVar)
+       (atomically, newEmptyTMVar, newTChanIO, orElse, putTMVar,
+        readTChan, takeTMVar, tryReadTChan, writeTChan)
 import Control.Monad
 import Path
 import Path.IO
 import Safe
 import System.Console.ANSI
 import qualified System.Directory as D
-       (canonicalizePath, setPermissions, getPermissions,
-        setOwnerExecutable)
+       (canonicalizePath, getPermissions, setOwnerExecutable,
+        setPermissions)
 import System.Environment (getProgName)
 import System.Exit
-import qualified System.FilePath as FP (splitPath, joinPath)
+import qualified System.FilePath as FP (joinPath, splitPath)
 import System.IO
-       (hSetBuffering, BufferMode(NoBuffering), stderr, stdout, hFlush)
+       (BufferMode(NoBuffering), hFlush, hSetBuffering, stderr, stdout)
 
 import Zifter.OptParse
 import Zifter.Recurse
