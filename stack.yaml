@@ -8,10 +8,11 @@ packages:
 - zifter-hindent
 - zifter-hlint
 - zifter-stack
+
 extra-deps:
-- genvalidity-0.3.1.0
-- genvalidity-hspec-0.3.0.0
-- genvalidity-path-0.1.0.2
-- validity-0.3.2.0
-- validity-path-0.1.0.0
+- genvalidity-0.4.0.0
+- genvalidity-hspec-0.4.0.0
+- genvalidity-path-0.2.0.0
+- validity-0.4.0.0
+- validity-path-0.2.0.0
 resolver: lts-8.5
