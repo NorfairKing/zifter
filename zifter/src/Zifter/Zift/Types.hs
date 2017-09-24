@@ -1,5 +1,5 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE RecordWildCards #-}
 
 module Zifter.Zift.Types where
 
@@ -40,8 +40,9 @@ data LMR
 
 instance Validity ZiftContext where
     isValid = isValid . rootdir
-    validate ZiftContext {..} = rootdir <?!> "rootdir"
-
+#if MIN_VERSION_validity(0,4,0)
+    validate zc = rootdir zc <?!> "rootdir"
+#endif
 newtype ZiftState = ZiftState
     { bufferedOutput :: [ZiftOutput] -- In reverse order
     } deriving (Show, Eq, Generic)
