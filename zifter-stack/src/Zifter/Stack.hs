@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 module Zifter.Stack where
 
 import Control.Monad
@@ -19,6 +20,9 @@ import Distribution.PackageDescription
 import Distribution.PackageDescription.Configuration
 import Distribution.PackageDescription.Parse
 import Distribution.Verbosity
+#if MIN_VERSION_Cabal(2,0,0)
+import Distribution.Types.UnqualComponentName
+#endif
 
 import Zifter.Zift
 
@@ -94,7 +98,8 @@ stackGetPackageTargetTuplesAccordingToCabalFiles = do
     (concat <$>) $
         forM cabalFiles $ \cabalFile -> do
             pd <-
-                liftIO $ readPackageDescription deafening $ toFilePath cabalFile
+                liftIO $ readPackage
+                    deafening $ toFilePath cabalFile
             let packageDesc = flattenPackageDescription pd
                 name = unPackageName $ pkgName $ package packageDesc
                 libname = name ++ ":lib"
@@ -103,9 +108,23 @@ stackGetPackageTargetTuplesAccordingToCabalFiles = do
                         Nothing -> []
                         Just _ -> [libname]
                 testnames =
-                    map (((name ++ ":test:") ++) . testName) $
+                    map (((name ++ ":test:") ++) .  testComponentName
+                        ) $
                     testSuites packageDesc
             pure [(name, lib ++ testnames)]
+  where
+    readPackage =
+#if MIN_VERSION_Cabal(2,0,0)
+                    readGenericPackageDescription
+#else
+                    readPackageDescription
+#endif
+    testComponentName =
+#if MIN_VERSION_Cabal(2,0,0)
+                            unUnqualComponentName . testName
+#else
+                            testName
+#endif
 
 stackBuild :: Zift ()
 stackBuild = do

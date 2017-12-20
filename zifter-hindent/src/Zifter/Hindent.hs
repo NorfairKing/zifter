@@ -16,12 +16,18 @@ newtype HindentBin =
     deriving (Show, Eq)
 
 hindentZift :: Zift ()
-hindentZift = do
+hindentZift = hindentZiftExcept []
+
+hindentZiftExcept :: [FilePath] -> Zift ()
+hindentZiftExcept ps = do
     hindentBin <- getHindent
     () <- hindentCheckAndPrintVersion hindentBin
     rd <- getRootDir
     fs <- liftIO $ snd <$> listDirRecur rd
-    let sources = filter (not . hidden) $ filter ((== ".hs") . fileExtension) fs
+    exclusions <- mapM (resolveFile rd) ps
+    let sources =
+            filter (not . (`elem` exclusions)) . filter (not . hidden) $
+            filter ((== ".hs") . fileExtension) fs
     forZ_ sources $ hindentSingleSource hindentBin
 
 getHindent :: Zift HindentBin

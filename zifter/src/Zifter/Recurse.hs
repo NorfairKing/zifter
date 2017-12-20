@@ -110,8 +110,8 @@ findZiftFilesRecursively :: Zift [Path Abs File]
 findZiftFilesRecursively = do
     rd <- getRootDir
     let filterZiftFiles = filter ((== $(mkRelFile "zift.hs")) . filename) -- TODO generalise to given predicate
-    let recurser absdir dirs files =
-            if absdir == rd
+    let recurser ad dirs files =
+            if ad == rd
                 then pure $ WalkExclude []
                 else do
                     let ziftFiles = filterZiftFiles files
@@ -119,9 +119,9 @@ findZiftFilesRecursively = do
                         [] -> pure $ WalkExclude [] -- No zift files found, recurse further downward.
                         -- Zift files found, run each of them but don't recurse further. That's their job.
                         _ -> pure $ WalkExclude dirs
-    let outputWriter absdir _ files =
+    let outputWriter ad _ files =
             pure $
-            if absdir == rd
+            if ad == rd
                 then []
                 else filterZiftFiles files
     walkDirAccum (Just recurser) outputWriter rd

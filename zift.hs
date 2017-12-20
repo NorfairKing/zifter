@@ -23,7 +23,11 @@ main =
     ziftWith $ do
         recursiveZift
         preprocessor $
-            ziftP [hindentZift, cabalFormatZift, googleJavaFormatZift]
+            ziftP
+                [ hindentZiftExcept ["zifter-stack/src/Zifter/Stack.hs"]
+                , cabalFormatZift
+                , googleJavaFormatZift
+                ]
         prechecker gitAddAllZift
         checker $ do
             hlintZift
