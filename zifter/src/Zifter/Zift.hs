@@ -18,8 +18,8 @@ module Zifter.Zift
     , module Zifter.Zift.Types
     ) where
 
-import Control.Monad
 import Control.Concurrent.STM (atomically, writeTChan)
+import Control.Monad
 import Control.Monad.IO.Class (liftIO)
 
 import System.Console.ANSI
@@ -130,5 +130,6 @@ printWithColors commands str = addZiftOutput $ ZiftOutput commands str
 addZiftOutput :: ZiftOutput -> Zift ()
 addZiftOutput zo =
     Zift $ \ctx -> do
-        atomically $ writeTChan (printChan ctx) zo
+        atomically $
+            writeTChan (printChan ctx) $ TokenOutput (recursionList ctx) zo
         pure $ ZiftSuccess ()

@@ -19,6 +19,12 @@ import System.Console.ANSI (SGR)
 
 import Zifter.OptParse.Types
 
+data ZiftToken
+    = TokenOutput [LR]
+                  ZiftOutput
+    | TokenDone [LR]
+    deriving (Show, Eq, Generic)
+
 data ZiftOutput = ZiftOutput
     { outputColors :: [SGR]
     , outputMessage :: String
@@ -28,13 +34,12 @@ data ZiftContext = ZiftContext
     { rootdir :: Path Abs Dir
     , tmpdir :: Path Abs Dir
     , settings :: Settings
-    , printChan :: TChan ZiftOutput
-    , recursionList :: [LMR] -- In reverse order
+    , printChan :: TChan ZiftToken
+    , recursionList :: [LR] -- In reverse order
     } deriving (Generic)
 
-data LMR
+data LR
     = L
-    | M
     | R
     deriving (Show, Eq, Generic)
 
@@ -76,45 +81,60 @@ instance Applicative Zift where
     pure a = Zift $ \_ -> pure $ pure a
     (Zift faf) <*> (Zift af) =
         Zift $ \zc -> do
-            let zc1 = zc {recursionList = L : recursionList zc}
-                zc2 = zc {recursionList = R : recursionList zc}
+            let left = L : recursionList zc
+                right = R : recursionList zc
+                zc1 = zc {recursionList = left}
+                zc2 = zc {recursionList = right}
             afaf <- async $ faf zc1
             aaf <- async $ af zc2
             efaa <- waitEither afaf aaf
             let complete fa a = pure $ fa <*> a
             case efaa of
-                Left far ->
-                    case far of
-                        ZiftFailed s -> do
-                            cancel aaf
-                            pure $ ZiftFailed s
-                        _ -> do
-                            t2 <- wait aaf
-                            complete far t2
-                Right ar ->
-                    case ar of
-                        ZiftFailed s -> do
-                            cancel afaf
-                            pure $ ZiftFailed s
-                        _ -> do
-                            t1 <- wait afaf
-                            complete t1 ar
+                Left far -> do
+                    finishSection left $ printChan zc
+                    r <-
+                        case far of
+                            ZiftFailed s -> do
+                                cancel aaf
+                                pure $ ZiftFailed s
+                            _ -> do
+                                t2 <- wait aaf
+                                complete far t2
+                    finishSection right $ printChan zc
+                    pure r
+                Right ar -> do
+                    finishSection right $ printChan zc
+                    r <-
+                        case ar of
+                            ZiftFailed s -> do
+                                cancel afaf
+                                pure $ ZiftFailed s
+                            _ -> do
+                                t1 <- wait afaf
+                                complete t1 ar
+                    finishSection left $ printChan zc
+                    pure r
 
 -- | 'Zift' actions can be composed.
 instance Monad Zift where
     (Zift fa) >>= mb =
         Zift $ \rd -> do
-            let newlist =
-                    case recursionList rd of
-                        (M:_) -> recursionList rd -- don't add another one, it just takes up space.
-                        _ -> M : recursionList rd
-            ra <- fa (rd {recursionList = newlist})
+            let left = L : recursionList rd
+            ra <- fa rd {recursionList = left}
+            finishSection left $ printChan rd
             case ra of
                 ZiftSuccess a ->
                     case mb a of
-                        Zift pb -> pb rd
+                        Zift pb -> do
+                            let right = R : recursionList rd
+                            res <- pb rd {recursionList = right}
+                            finishSection right $ printChan rd
+                            pure res
                 ZiftFailed e -> pure $ ZiftFailed e
     fail = Fail.fail
+
+finishSection :: [LR] -> TChan ZiftToken -> IO ()
+finishSection ls pchan = atomically $ writeTChan pchan $ TokenDone ls
 
 -- | A 'Zift' action can fail.
 --
@@ -173,19 +193,18 @@ instance Monad ZiftResult where
 
 instance MonadFail ZiftResult where
     fail = ZiftFailed
-
--- | Internal: do not use yourself.
-tryFlushZiftBuffer :: ZiftContext -> ZiftState -> IO ZiftState
-tryFlushZiftBuffer ctx st =
-    if flushable $ recursionList ctx
-        then do
-            let zos = reverse $ bufferedOutput st
-                st' = st {bufferedOutput = []}
-            atomically $ mapM_ (writeTChan $ printChan ctx) zos
-            pure st'
-        else pure st
-
--- The buffer is flushable when it's guaranteed to be the first in the in-order
--- of the evaluation tree.
-flushable :: [LMR] -> Bool
-flushable = all (== M) . dropWhile (== L)
+-- -- | Internal: do not use yourself.
+-- tryFlushZiftBuffer :: ZiftContext -> ZiftState -> IO ZiftState
+-- tryFlushZiftBuffer ctx st =
+--     if flushable $ recursionList ctx
+--         then do
+--             let zos = reverse $ bufferedOutput st
+--                 st' = st {bufferedOutput = []}
+--             atomically $ mapM_ (writeTChan $ printChan ctx) zos
+--             pure st'
+--         else pure st
+--
+-- -- The buffer is flushable when it's guaranteed to be the first in the in-order
+-- -- of the evaluation tree.
+-- flushable :: [LR] -> Bool
+-- flushable = all (== L)
