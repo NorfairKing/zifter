@@ -6,4 +6,6 @@ import Zifter.OptParse.Types
 
 import Test.Validity
 
+instance GenUnchecked OutputMode
+
 instance GenUnchecked Settings

@@ -5,8 +5,10 @@ module Zifter.OptParse
     , Instructions
     , Dispatch(..)
     , Settings(..)
+    , OutputMode(..)
     ) where
 
+import Data.Maybe
 import Data.Monoid
 import Options.Applicative
 import System.Environment (getArgs)
@@ -22,7 +24,11 @@ getInstructions = do
 combineToInstructions :: Command -> Flags -> Configuration -> IO Instructions
 combineToInstructions cmd Flags {..} Configuration = pure (d, sets)
   where
-    sets = Settings {setsOutputColor = flagsOutputColor}
+    sets =
+        Settings
+        { setsOutputColor = flagsOutputColor
+        , setsOutputMode = fromMaybe OutputFast flagsOutputMode
+        }
     d =
         case cmd of
             CommandRun -> DispatchRun
@@ -105,7 +111,8 @@ parseCommandInstall = info parser modifier
     modifier = fullDesc <> progDesc "Install the zift script."
 
 parseFlags :: Parser Flags
-parseFlags = Flags <$> doubleSwitch "color" "color in output." mempty
+parseFlags =
+    Flags <$> doubleSwitch "color" "color in output." mempty <*> outputModeFlag
 
 doubleSwitch :: String -> String -> Mod FlagFields Bool -> Parser Bool
 doubleSwitch name helpText mods =
@@ -129,3 +136,16 @@ doubleSwitch name helpText mods =
                        helpText ++ " (default: " ++ show defaultValue ++ ")") <>
                   mods))) <|>
        pure defaultValue
+
+outputModeFlag :: Parser (Maybe OutputMode)
+outputModeFlag =
+    (flag'
+         (Just OutputLinear)
+         (mconcat [long "linear", help "output linearly, reorder as necessary."]) <|>
+     flag'
+         (Just OutputFast)
+         (mconcat
+              [ long "fast"
+              , help "output as soon as possible, this is likely faster"
+              ])) <|>
+    pure Nothing

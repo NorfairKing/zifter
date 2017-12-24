@@ -19,6 +19,7 @@ module Zifter.Zift
     ) where
 
 import Control.Monad
+import Control.Concurrent.STM (atomically, writeTChan)
 import Control.Monad.IO.Class (liftIO)
 
 import System.Console.ANSI
@@ -29,7 +30,7 @@ import Zifter.OptParse.Types
 import Zifter.Zift.Types
 
 getContext :: Zift ZiftContext
-getContext = Zift $ \zc st -> pure (ZiftSuccess zc, st)
+getContext = Zift $ pure . ZiftSuccess
 
 -- | Get the root directory of the @zift.hs@ script that is being executed.
 getRootDir :: Zift (Path Abs Dir)
@@ -128,6 +129,6 @@ printWithColors commands str = addZiftOutput $ ZiftOutput commands str
 
 addZiftOutput :: ZiftOutput -> Zift ()
 addZiftOutput zo =
-    Zift $ \_ st -> do
-        let st' = ZiftState {bufferedOutput = zo : bufferedOutput st}
-        pure (ZiftSuccess (), st')
+    Zift $ \ctx -> do
+        atomically $ writeTChan (printChan ctx) zo
+        pure $ ZiftSuccess ()

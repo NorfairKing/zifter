@@ -50,8 +50,8 @@ module Zifter
 
 import Control.Concurrent.Async (async, wait)
 import Control.Concurrent.STM
-       (atomically, newEmptyTMVar, newTChanIO, orElse, putTMVar,
-        readTChan, takeTMVar, tryReadTChan, writeTChan)
+       (TChan, TMVar, atomically, newEmptyTMVar, newTChanIO, orElse,
+        putTMVar, readTChan, takeTMVar, tryReadTChan, writeTChan)
 import Control.Monad
 import Path
 import Path.IO
@@ -140,7 +140,7 @@ runZift ctx zfunc = do
     let runner =
             withSystemTempDir "zifter" $ \d ->
                 withCurrentDir d $ do
-                    (r, zs) <- zift zfunc ctx mempty
+                    r <- zift zfunc ctx
                     result <-
                         case r of
                             ZiftFailed err -> do
@@ -151,24 +151,36 @@ runZift ctx zfunc = do
                                         err
                                 pure $ ExitFailure 1
                             ZiftSuccess () -> pure ExitSuccess
-                    void $ tryFlushZiftBuffer ctx zs
                     atomically $ putTMVar fmvar ()
                     pure result
-    let outputOne :: ZiftOutput -> IO ()
-        outputOne (ZiftOutput commands str) = do
-            let color = setsOutputColor sets
-            when color $ setSGR commands
-            putStr str
-            when color $ setSGR [Reset]
-            putStr "\n" -- Because otherwise it doesn't work?
-            hFlush stdout
-    let outputAll = do
-            mout <- atomically $ tryReadTChan pchan
-            case mout of
-                Nothing -> pure ()
-                Just output -> do
-                    outputOne output
-                    outputAll
+    let printer = outputPrinter (deriveOutputSets sets) pchan fmvar
+    printerAsync <- async printer
+    runnerAsync <- async runner
+    result <- wait runnerAsync
+    wait printerAsync
+    pure result
+
+deriveOutputSets :: Settings -> OutputSets
+deriveOutputSets Settings {..} =
+    OutputSets {outputColor = setsOutputColor, outputMode = setsOutputMode}
+
+data OutputSets = OutputSets
+    { outputColor :: Bool
+    , outputMode :: OutputMode
+    } deriving (Show, Eq)
+
+outputPrinter :: OutputSets -> TChan ZiftOutput -> TMVar () -> IO ()
+outputPrinter OutputSets {..} =
+    (case outputMode of
+         OutputLinear -> outputLinear
+         OutputFast -> outputFast)
+        outputColor
+
+outputFast :: Bool -> TChan ZiftOutput -> TMVar () -> IO ()
+outputFast = outputLinear
+
+outputLinear :: Bool -> TChan ZiftOutput -> TMVar () -> IO ()
+outputLinear color pchan fmvar =
     let printer = do
             mdone <-
                 atomically $
@@ -178,11 +190,22 @@ runZift ctx zfunc = do
                 Right output -> do
                     outputOne output
                     printer
-    printerAsync <- async printer
-    runnerAsync <- async runner
-    result <- wait runnerAsync
-    wait printerAsync
-    pure result
+    in printer
+  where
+    outputOne :: ZiftOutput -> IO ()
+    outputOne (ZiftOutput commands str) = do
+        when color $ setSGR commands
+        putStr str
+        when color $ setSGR [Reset]
+        putStr "\n" -- Because otherwise it doesn't work?
+        hFlush stdout
+    outputAll = do
+        mout <- atomically $ tryReadTChan pchan
+        case mout of
+            Nothing -> pure ()
+            Just output -> do
+                outputOne output
+                outputAll
 
 runAsPreProcessor :: Zift () -> Zift ()
 runAsPreProcessor func = do
