@@ -18,6 +18,7 @@ import Zifter
 import Zifter.OptParse
 import Zifter.Zift
 
+import Zifter.Gen ()
 import Zifter.OptParse.Gen ()
 import Zifter.Zift.Gen ()
 
@@ -32,17 +33,22 @@ spec = do
         monoidSpec @(ZiftResult String)
         monadSpec @ZiftResult
     describe "ziftRunner" $ do
-        it "pure () outputs nothing" $ pure () `outputShouldBe` []
+        it "pure () outputs nothing" $ pure () `outputShouldBe` [
+                 TokenDone []
+                ]
         it "pure () twice outputs two tokens" $
             let func = do
                     pure ()
                     pure ()
-            in func `outputShouldBe` [TokenDone [L], TokenDone [R]]
+            in func `outputShouldBe` [TokenDone [L], TokenDone [R]
+                , TokenDone []
+                ]
         it "printZift outputs one message" $
             printZift "hello" `outputShouldBe`
             [ TokenOutput
                   []
                   ZiftOutput {outputColors = [], outputMessage = "hello"}
+            , TokenDone []
             ]
         it "printZift twice outputs two messages and two tokens" $
             let func = do
@@ -57,7 +63,14 @@ spec = do
                      [R]
                      ZiftOutput {outputColors = [], outputMessage = "world"}
                , TokenDone [R]
+                , TokenDone []
                ]
+    describe "addState" $ do
+        it "flushes nothing on a print token" $ do
+            forAllUnchecked $ \st ->
+                forAllUnchecked $ \lr ->
+                    let (st', zos) = addState st (TokenDone lr)
+                    in zos `shouldBe` []
 
 outputShouldBe :: Zift () -> [ZiftToken] -> Expectation
 outputShouldBe func ls = outputShouldSatisfy func (== ls)

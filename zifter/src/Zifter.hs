@@ -1,5 +1,6 @@
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 -- | The main 'Zifter' module.
 --
@@ -48,6 +49,8 @@ module Zifter
     , runZift
     , ziftRunner
     , outputPrinter
+    , LinearState(..) -- TODO Split  this into an other module
+    , addState
     ) where
 
 import Control.Concurrent.Async (async, wait)
@@ -55,6 +58,7 @@ import Control.Concurrent.STM
        (TChan, TMVar, atomically, newEmptyTMVar, newTChanIO, orElse,
         putTMVar, readTChan, takeTMVar, tryReadTChan)
 import Control.Monad
+import GHC.Generics (Generic)
 import Path
 import Path.IO
 import Safe
@@ -73,6 +77,7 @@ import Zifter.Recurse
 import Zifter.Script
 import Zifter.Setup
 import Zifter.Zift
+import Zifter.Zift.Types
 
 -- | Run a 'ZiftScript' to create the 'ZiftSetup', and then use 'ziftWithSetup'
 --
@@ -158,6 +163,7 @@ ziftRunner ctx fmvar zfunc =
     withSystemTempDir "zifter" $ \d ->
         withCurrentDir d $ do
             r <- zift zfunc ctx
+            finishSection [] $ printChan ctx
             atomically $ putTMVar fmvar ()
             pure r
 
@@ -178,10 +184,7 @@ outputPrinter OutputSets {..} =
         outputColor
 
 outputFast :: Bool -> TChan ZiftToken -> TMVar () -> IO ()
-outputFast = outputLinear
-
-outputLinear :: Bool -> TChan ZiftToken -> TMVar () -> IO ()
-outputLinear color pchan fmvar =
+outputFast color pchan fmvar =
     let printer = do
             mdone <-
                 atomically $
@@ -203,6 +206,40 @@ outputLinear color pchan fmvar =
             Just output -> do
                 outputOneToken output
                 outputAll
+
+outputLinear :: Bool -> TChan ZiftToken -> TMVar () -> IO ()
+outputLinear color pchan fmvar =
+    let printer st = do
+            mdone <-
+                atomically $
+                (Left <$> takeTMVar fmvar) `orElse` (Right <$> readTChan pchan)
+            case mdone of
+                Left () -> outputAll -- FIXME reorder these as well
+                Right output -> do
+                    let (st', buf) = addState st output
+                    outputBuf buf
+                    printer st'
+    in printer LinearState
+  where
+    outputBuf :: [ZiftOutput] -> IO ()
+    outputBuf = mapM_ (outputOne color)
+    outputOneToken :: ZiftToken -> IO ()
+    outputOneToken (TokenDone _) = pure ()
+    outputOneToken (TokenOutput _ zo) = outputOne color zo
+    outputAll = do
+        mout <- atomically $ tryReadTChan pchan
+        case mout of
+            Nothing -> pure ()
+            Just output -> do
+                outputOneToken output
+                outputAll
+
+data LinearState =
+    LinearState
+    deriving (Show, Eq, Generic)
+
+addState :: LinearState -> ZiftToken -> (LinearState, [ZiftOutput])
+addState LinearState _ = (LinearState, [])
 
 outputOne :: Bool -> ZiftOutput -> IO ()
 outputOne color (ZiftOutput commands str) = do

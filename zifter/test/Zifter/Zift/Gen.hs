@@ -45,6 +45,8 @@ instance GenUnchecked SGR
 
 instance GenUnchecked LR
 
+instance GenUnchecked ZiftToken
+
 instance GenUnchecked ZiftOutput
 
 instance GenUnchecked ZiftState
