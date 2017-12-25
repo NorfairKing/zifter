@@ -6,9 +6,12 @@ module Zifter.ZiftSpec
     ) where
 
 import Test.Hspec
+import Test.QuickCheck
 import Test.Validity
 
 import Data.GenValidity.Path ()
+import Data.Maybe
+import Data.Monoid
 
 import Control.Concurrent.STM
 
@@ -65,89 +68,124 @@ spec = do
                ]
     describe "addState" $ do
         it "stores the first output on the left for [L]" $
-            addState LinearUnknown (ZiftToken [L] Nothing) `shouldBe`
-            LinearBranch (LinearLeaf Nothing) LinearUnknown
+            forAllUnchecked $ \mzo ->
+                addState LinearUnknown (ZiftToken [L] mzo) `shouldBe`
+                Just (LinearBranch (LinearLeaf mzo) LinearUnknown)
         it "stores the first output on the Right for [R]" $
-            addState LinearUnknown (ZiftToken [R] Nothing) `shouldBe`
-            LinearBranch LinearUnknown (LinearLeaf Nothing)
+            forAllUnchecked $ \mzo ->
+                addState LinearUnknown (ZiftToken [R] mzo) `shouldBe`
+                Just (LinearBranch LinearUnknown (LinearLeaf mzo))
     describe "flushState" $ do
+        let l = LinearLeaf
+            u = LinearUnknown
+            d = LinearDone
+            b = LinearBranch
+            ln = l Nothing
+            t bs es eb =
+                let (as, ab) = flushState bs
+                in do as `shouldBe` es
+                      ab `shouldBe` eb
         it "flushes a simple branch at the top level" $
             forAllUnchecked $ \(hello, world) ->
-                flushState
-                    (LinearBranch
-                         (LinearLeaf (Just hello))
-                         (LinearLeaf (Just world))) `shouldBe`
-                (LinearLeaf Nothing, [hello, world])
+                t
+                    (b (l (Just hello)) (l (Just world)))
+                    (b d d)
+                    (BufReady [hello, world])
         it
             "flushes and prunes the left side of a branch if the right side is unknown" $
             forAllUnchecked $ \msg ->
-                let s = LinearBranch (LinearLeaf (Just msg)) LinearUnknown
-                in flushState s `shouldBe` (LinearUnknown, [msg])
+                t (b (l (Just msg)) u) (b d u) (BufReady [msg])
         it
             "does not flush the right side of a branch if the left side is unknown" $
             forAllUnchecked $ \msg ->
-                let s = LinearBranch LinearUnknown (LinearLeaf (Just msg))
-                in flushState s `shouldBe` (s, [])
+                let s = b u (l (Just msg))
+                in t s s BufNotReady
+        it "flushes a branch with two leaves" $
+            forAllUnchecked $ \(hello, world) ->
+                t
+                    (b (l (Just hello)) (l (Just world)))
+                    (b d d)
+                    (BufReady [hello, world])
         it
             "flushes the entire state when the left side is done and the right side is one level deep" $
             forAllUnchecked $ \(hello, world) ->
-                let s =
-                        LinearBranch
-                            (LinearLeaf Nothing)
-                            (LinearBranch
-                                 (LinearLeaf (Just hello))
-                                 (LinearLeaf (Just world)))
-                in flushState s `shouldBe` (LinearLeaf Nothing, [hello, world])
+                t
+                    (b ln (b (l (Just hello)) (l (Just world))))
+                    (b d (b d d))
+                    (BufReady [hello, world])
         it
             "flushes the entire state when the left side is done and the right side is two levels deep" $
             forAllUnchecked $ \(hello, big, beautiful, world) ->
-                let s =
-                        LinearBranch
-                            (LinearLeaf Nothing)
-                            (LinearBranch
-                                 (LinearBranch
-                                      (LinearLeaf (Just hello))
-                                      (LinearLeaf (Just big)))
-                                 (LinearBranch
-                                      (LinearLeaf (Just beautiful))
-                                      (LinearLeaf (Just world))))
-                in flushState s `shouldBe`
-                   (LinearLeaf Nothing, [hello, big, beautiful, world])
+                t
+                    (b (l Nothing)
+                         (b (b (l (Just hello)) (l (Just big)))
+                              (b (l (Just beautiful)) (l (Just world)))))
+                    (b d (b (b d d) (b d d)))
+                    (BufReady [hello, big, beautiful, world])
         it
-            "flushes and prunes the entire left half of a complete binary tree of size two if the entire left part is done" $
+            "flushes the entire left half of a complete binary tree of size two if the entire left part is done" $
             forAllUnchecked $ \(hello, world) ->
-                let s =
-                        LinearBranch
-                            (LinearBranch
-                                 (LinearLeaf (Just hello))
-                                 (LinearLeaf (Just world)))
-                            (LinearBranch LinearUnknown LinearUnknown)
-                    s' = LinearBranch LinearUnknown LinearUnknown
-                in flushState s `shouldBe` (s', [hello, world])
+                t
+                    (b (b (l (Just hello)) (l (Just world))) (b u u))
+                    (b (b d d) (b u u))
+                    (BufReady [hello, world])
         it
-            "flushes and prunes the correct part of the right half of the state when the left part is done and the right side isn't" $
+            "flushes the correct part of the right half of the state when the left part is done and the right side isn't" $
             forAllUnchecked $ \(hello, world) ->
-                let s =
-                        LinearBranch
-                            (LinearLeaf (Just hello))
-                            (LinearBranch
-                                 (LinearLeaf (Just world))
-                                 LinearUnknown)
-                    s' = LinearUnknown
-                in flushState s `shouldBe` (s', [hello, world])
+                t
+                    (b (l (Just hello)) (b (l (Just world)) u))
+                    (b d (b d u))
+                    (BufReady [hello, world])
         it
-            "flushes and prunes the entire left half of a complete binary tree of size two if the entire left part is done" $
+            "flushes and the entire left half of a complete binary tree of size two if the entire left part is done" $
             forAllUnchecked $ \(hello, beautiful, world) ->
-                let s =
-                        LinearBranch
-                            (LinearBranch
-                                 (LinearLeaf (Just hello))
-                                 (LinearLeaf (Just beautiful)))
-                            (LinearBranch
-                                 (LinearLeaf (Just world))
-                                 LinearUnknown)
-                    s' = LinearUnknown
-                in flushState s `shouldBe` (s', [hello, beautiful, world])
+                t
+                    (b (b (l (Just hello)) (l (Just beautiful)))
+                         (b (l (Just world)) u))
+                    (b (b d d) (b d u))
+                    (BufReady [hello, beautiful, world])
+        it "flushes the entire tree for any done tree" $
+            forAll doneTree $ \st ->
+                let (s', _) = flushState st
+                in s' `shouldBe` makeForceFlushed st
+        it "flushes the entire left tree for any tree whose left part is done" $
+            forAllShrink doneTree (map makeForceFlushed . shrinkUnchecked) $ \dt ->
+                forAllUnchecked $ \ut ->
+                    let s = b dt ut
+                        (rs', b2) = flushState ut
+                    in t s
+                           (b (makeForceFlushed dt) rs')
+                           (flushStateAll dt <> b2)
+        it "can only grow the depth of the state" $
+            forAll
+                (genUnchecked `suchThat`
+                 (\(st, token) -> isJust $ processToken st token)) $ \(st, token) ->
+                case processToken st token of
+                    Nothing -> pure () -- fine
+                    Just (t', _) -> depth t' `shouldSatisfy` (>= depth st)
+
+depth :: LinearState -> Int
+depth LinearUnknown = 1
+depth LinearDone = 1
+depth (LinearLeaf _) = 1
+depth (LinearBranch t1 t2) = max (depth t1) (depth t2)
+
+doneTree :: Gen LinearState
+doneTree =
+    sized $ \s ->
+        oneof
+            [ LinearLeaf <$> genUnchecked
+            , pure LinearDone
+            , do (ls, rs) <- genSplit s
+                 LinearBranch <$> resize ls doneTree <*> resize rs doneTree
+            ]
+
+makeForceFlushed :: LinearState -> LinearState
+makeForceFlushed LinearUnknown = LinearUnknown
+makeForceFlushed LinearDone = LinearDone
+makeForceFlushed (LinearLeaf _) = LinearDone
+makeForceFlushed (LinearBranch s1 s2) =
+    LinearBranch (makeForceFlushed s1) (makeForceFlushed s2)
 
 outputShouldBe :: Zift () -> [ZiftToken] -> Expectation
 outputShouldBe func ls = outputShouldSatisfy func (== ls)

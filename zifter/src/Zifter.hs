@@ -52,9 +52,14 @@ module Zifter
     , ziftRunner
     , outputPrinter
     , LinearState(..) -- TODO Split  this into an other module
+    , prettyToken
+    , prettyState
     , processToken
     , addState
     , flushState
+    , Buf(..)
+    , pruneState
+    , flushStateAll
     ) where
 
 import Control.Concurrent.Async
@@ -62,6 +67,7 @@ import Control.Concurrent.STM
 import Control.Exception (SomeException, catch, displayException)
 import Control.Monad
 import Data.Maybe
+import Data.Monoid
 import GHC.Generics (Generic)
 import Path
 import Path.IO
@@ -200,12 +206,8 @@ interpretZift = go
         zr <- go ctx za
         pure $ f <$> zr
     go zc (ZiftApp faf af) = do
-        let left = L : recursionList zc
-            right = R : recursionList zc
-            zc1 = zc {recursionList = left}
-            zc2 = zc {recursionList = right}
-        afaf <- async $ go zc1 faf
-        aaf <- async $ go zc2 af
+        afaf <- async $ go (zc {recursionList = L : recursionList zc}) faf
+        aaf <- async $ go (zc {recursionList = R : recursionList zc}) af
         efaa <- waitEither afaf aaf
         let complete fa a = pure $ fa <*> a
         case efaa of
@@ -230,12 +232,10 @@ interpretZift = go
                             complete t1 ar
                 pure r
     go rd (ZiftBind fa mb) = do
-        let left = L : recursionList rd
-        ra <- go (rd {recursionList = left}) fa
+        ra <- go (rd {recursionList = L : recursionList rd}) fa
         case ra of
-            ZiftSuccess a -> do
-                let right = R : recursionList rd
-                go (rd {recursionList = right}) $ mb a
+            ZiftSuccess a ->
+                go (rd {recursionList = R : recursionList rd}) $ mb a
             ZiftFailed e -> pure $ ZiftFailed e
 
 deriveOutputSets :: Settings -> OutputSets
@@ -286,77 +286,113 @@ outputLinear color pchan fmvar =
                 (Left <$> takeTMVar fmvar) `orElse` (Right <$> readTChan pchan)
             case mdone of
                 Left () -> outputAll st
-                Right output -> do
-                    let (st', buf) = processToken st output
-                    outputBuf buf
-                    printer st'
+                Right token ->
+                    case processToken st token of
+                        Nothing -> do
+                            putStrLn $ prettyToken token
+                            putStrLn $ prettyState st
+                            error
+                                "something went horribly wrong, the above should help"
+                        Just (st', buf) -> do
+                            outputBuf buf
+                            printer st'
     in printer LinearUnknown
   where
-    outputBuf :: [ZiftOutput] -> IO ()
-    outputBuf = mapM_ (outputOne color)
+    outputBuf :: Buf -> IO ()
+    outputBuf BufNotReady = pure ()
+    outputBuf (BufReady os) = mapM_ (outputOne color) os
     outputAll st = do
         mout <- atomically $ tryReadTChan pchan
         case mout of
             Nothing -> outputBuf $ flushStateAll st
-            Just output -> do
-                let (st', buf) = processToken st output
-                outputBuf buf
-                outputAll st'
+            Just token ->
+                case processToken st token of
+                    Nothing -> error "something went horribly wrong"
+                    Just (st', buf) -> do
+                        outputBuf buf
+                        outputAll st'
 
 data LinearState
     = LinearUnknown
     | LinearLeaf (Maybe ZiftOutput)
+    | LinearDone
     | LinearBranch LinearState
                    LinearState
     deriving (Show, Eq, Generic)
 
+prettyToken :: ZiftToken -> String
+prettyToken (ZiftToken lr _) = concatMap show $ reverse lr
+
 prettyState :: LinearState -> String
-prettyState = unlines . go
-  where
-    go LinearUnknown = ["U"]
-    go (LinearLeaf mzo) = [show mzo]
-    go (LinearBranch lsl lsr) =
-        map (" " ++) (go lsl) ++ [""] ++ map (" " ++) (go lsr)
+prettyState LinearUnknown = "u"
+prettyState LinearDone = "d"
+prettyState (LinearLeaf Nothing) = "n"
+prettyState (LinearLeaf (Just _)) = "m"
+prettyState (LinearBranch l1 l2) =
+    concat ["(", "b", " ", prettyState l1, " ", prettyState l2, ")"]
 
-processToken :: LinearState -> ZiftToken -> (LinearState, [ZiftOutput])
-processToken ls = flushState . addState ls
+processToken :: LinearState -> ZiftToken -> Maybe (LinearState, Buf)
+processToken ls zt = do
+    ls' <- addState ls zt
+    let (ls'', buf) = flushState ls'
+        ls''' = pruneState ls''
+    pure (ls''', buf)
 
-addState :: LinearState -> ZiftToken -> LinearState
-addState s zt@(ZiftToken ls mzo) = go s $ reverse ls -- FIXME this is probably slow
+addState :: LinearState -> ZiftToken -> Maybe LinearState
+addState s (ZiftToken ls mzo) = go s $ reverse ls -- FIXME this is probably slow
   where
     u = LinearUnknown
-    go :: LinearState -> [LR] -> LinearState
-    go LinearUnknown (L:rest) = LinearBranch (go u rest) u
-    go LinearUnknown (R:rest) = LinearBranch u (go u rest)
-    go LinearUnknown [] = LinearLeaf mzo
-    go (LinearLeaf _) _ =
-        error $ unlines ["should never happen (1)", show zt, prettyState s]
-    go (LinearBranch l r) (L:rest) = LinearBranch (go l rest) r
-    go (LinearBranch l r) (R:rest) = LinearBranch l (go r rest)
-    go (LinearBranch _ _) [] = error $ "should never happen (2)" ++ show zt
+    go :: LinearState -> [LR] -> Maybe LinearState
+    go LinearUnknown (L:rest) = LinearBranch <$> go u rest <*> pure u
+    go LinearUnknown (R:rest) = LinearBranch u <$> go u rest
+    go LinearUnknown [] = Just $ LinearLeaf mzo
+    go (LinearBranch l r) (L:rest) = LinearBranch <$> go l rest <*> pure r
+    go (LinearBranch l r) (R:rest) = LinearBranch l <$> go r rest
+    go LinearDone _ = Nothing
+    go (LinearLeaf _) _ = Nothing
+        -- error $ unlines ["should never happen (1)", show zt, prettyState s]
+    go (LinearBranch _ _) [] = Nothing -- error $ "should never happen (2)" ++ show zt
 
-flushState :: LinearState -> (LinearState, [ZiftOutput])
-flushState = flushLeft
+flushState :: LinearState -> (LinearState, Buf)
+flushState = go
   where
-    flushLeft LinearUnknown = (LinearUnknown, [])
-    flushLeft (LinearLeaf Nothing) = (LinearLeaf Nothing, [])
-    flushLeft (LinearLeaf (Just zo)) = (LinearLeaf Nothing, [zo])
-    flushLeft (LinearBranch lsl lsr) =
-        let (lsl', lbuf) = flushLeft lsl
-            (lsr', rbuf) = flushLeft lsr
-        in case (lsl', lsr') of
-               (LinearLeaf Nothing, LinearLeaf Nothing) ->
-                   (LinearLeaf Nothing, lbuf ++ rbuf)
-               (LinearLeaf Nothing, _) -> (lsr', lbuf ++ rbuf)
-               (LinearLeaf l, _) ->
-                   (LinearBranch (LinearLeaf l) lsr', lbuf ++ rbuf)
-               (LinearUnknown, _) -> (LinearBranch LinearUnknown lsr, [])
-               (LinearBranch _ _, _) -> (LinearBranch lsl lsr, [])
+    go LinearUnknown = (LinearUnknown, BufNotReady)
+    go LinearDone = (LinearDone, BufReady [])
+    go (LinearLeaf Nothing) = (LinearDone, BufReady [])
+    go (LinearLeaf (Just zo)) = (LinearDone, BufReady [zo])
+    go (LinearBranch ls rs) =
+        let (ls', lbuf) = go ls
+            (rs', rbuf) = go rs
+        in case lbuf of
+               BufNotReady -> (LinearBranch ls' rs, lbuf)
+               BufReady _ -> (LinearBranch ls' rs', lbuf <> rbuf)
 
-flushStateAll :: LinearState -> [ZiftOutput]
-flushStateAll LinearUnknown = []
-flushStateAll (LinearLeaf mzo) = maybeToList mzo
-flushStateAll (LinearBranch lsl lsr) = flushStateAll lsl ++ flushStateAll lsr
+data Buf
+    = BufNotReady
+    | BufReady [ZiftOutput]
+    deriving (Show, Eq, Generic)
+
+instance Monoid Buf where
+    mempty = BufReady []
+    BufNotReady `mappend` _ = BufNotReady
+    BufReady zos1 `mappend` BufReady zos2 = BufReady $ zos1 ++ zos2
+    BufReady zos1 `mappend` BufNotReady = BufReady zos1
+
+pruneState :: LinearState -> LinearState
+pruneState LinearDone = LinearDone
+pruneState (LinearLeaf Nothing) = LinearDone
+pruneState (LinearLeaf mzo) = LinearLeaf mzo
+pruneState LinearUnknown = LinearUnknown
+pruneState (LinearBranch ls rs) =
+    case (pruneState ls, pruneState rs) of
+        (LinearDone, LinearDone) -> LinearDone
+        (ls', rs') -> LinearBranch ls' rs'
+
+flushStateAll :: LinearState -> Buf
+flushStateAll LinearUnknown = mempty
+flushStateAll LinearDone = mempty
+flushStateAll (LinearLeaf mzo) = BufReady $ maybeToList mzo
+flushStateAll (LinearBranch lsl lsr) = flushStateAll lsl <> flushStateAll lsr
 
 outputOne :: Bool -> ZiftOutput -> IO ()
 outputOne color (ZiftOutput commands str) = do
