@@ -27,7 +27,7 @@ combineToInstructions cmd Flags {..} Configuration = pure (d, sets)
     sets =
         Settings
         { setsOutputColor = flagsOutputColor
-        , setsOutputMode = fromMaybe OutputFast flagsOutputMode
+        , setsOutputMode = fromMaybe OutputLinear flagsOutputMode
         }
     d =
         case cmd of

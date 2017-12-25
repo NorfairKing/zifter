@@ -49,8 +49,6 @@ instance GenUnchecked ZiftToken
 
 instance GenUnchecked ZiftOutput
 
-instance GenUnchecked ZiftState
-
 instance (Validity a) => Validity (RGB a) where
     validate RGB {..} =
         (channelRed <?!> "channelRed") <> (channelGreen <?!> "channelGreen") <>

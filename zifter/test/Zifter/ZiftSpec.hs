@@ -33,44 +33,121 @@ spec = do
         monoidSpec @(ZiftResult String)
         monadSpec @ZiftResult
     describe "ziftRunner" $ do
-        it "pure () outputs nothing" $ pure () `outputShouldBe` [
-                 TokenDone []
-                ]
+        it "pure () outputs nothing" $
+            pure () `outputShouldBe` [ZiftToken [] Nothing]
         it "pure () twice outputs two tokens" $
             let func = do
                     pure ()
                     pure ()
-            in func `outputShouldBe` [TokenDone [L], TokenDone [R]
-                , TokenDone []
-                ]
+            in func `outputShouldBe`
+               [ZiftToken [L] Nothing, ZiftToken [R] Nothing]
         it "printZift outputs one message" $
             printZift "hello" `outputShouldBe`
-            [ TokenOutput
+            [ ZiftToken
                   []
-                  ZiftOutput {outputColors = [], outputMessage = "hello"}
-            , TokenDone []
+                  (Just ZiftOutput {outputColors = [], outputMessage = "hello"})
             ]
         it "printZift twice outputs two messages and two tokens" $
             let func = do
                     printZift "hello"
                     printZift "world"
             in func `outputShouldBe`
-               [ TokenOutput
+               [ ZiftToken
                      [L]
-                     ZiftOutput {outputColors = [], outputMessage = "hello"}
-               , TokenDone [L]
-               , TokenOutput
+                     (Just
+                          ZiftOutput
+                          {outputColors = [], outputMessage = "hello"})
+               , ZiftToken
                      [R]
-                     ZiftOutput {outputColors = [], outputMessage = "world"}
-               , TokenDone [R]
-                , TokenDone []
+                     (Just
+                          ZiftOutput
+                          {outputColors = [], outputMessage = "world"})
                ]
     describe "addState" $ do
-        it "flushes nothing on a print token" $ do
-            forAllUnchecked $ \st ->
-                forAllUnchecked $ \lr ->
-                    let (st', zos) = addState st (TokenDone lr)
-                    in zos `shouldBe` []
+        it "stores the first output on the left for [L]" $
+            addState LinearUnknown (ZiftToken [L] Nothing) `shouldBe`
+            LinearBranch (LinearLeaf Nothing) LinearUnknown
+        it "stores the first output on the Right for [R]" $
+            addState LinearUnknown (ZiftToken [R] Nothing) `shouldBe`
+            LinearBranch LinearUnknown (LinearLeaf Nothing)
+    describe "flushState" $ do
+        it "flushes a simple branch at the top level" $
+            forAllUnchecked $ \(hello, world) ->
+                flushState
+                    (LinearBranch
+                         (LinearLeaf (Just hello))
+                         (LinearLeaf (Just world))) `shouldBe`
+                (LinearLeaf Nothing, [hello, world])
+        it
+            "flushes and prunes the left side of a branch if the right side is unknown" $
+            forAllUnchecked $ \msg ->
+                let s = LinearBranch (LinearLeaf (Just msg)) LinearUnknown
+                in flushState s `shouldBe` (LinearUnknown, [msg])
+        it
+            "does not flush the right side of a branch if the left side is unknown" $
+            forAllUnchecked $ \msg ->
+                let s = LinearBranch LinearUnknown (LinearLeaf (Just msg))
+                in flushState s `shouldBe` (s, [])
+        it
+            "flushes the entire state when the left side is done and the right side is one level deep" $
+            forAllUnchecked $ \(hello, world) ->
+                let s =
+                        LinearBranch
+                            (LinearLeaf Nothing)
+                            (LinearBranch
+                                 (LinearLeaf (Just hello))
+                                 (LinearLeaf (Just world)))
+                in flushState s `shouldBe` (LinearLeaf Nothing, [hello, world])
+        it
+            "flushes the entire state when the left side is done and the right side is two levels deep" $
+            forAllUnchecked $ \(hello, big, beautiful, world) ->
+                let s =
+                        LinearBranch
+                            (LinearLeaf Nothing)
+                            (LinearBranch
+                                 (LinearBranch
+                                      (LinearLeaf (Just hello))
+                                      (LinearLeaf (Just big)))
+                                 (LinearBranch
+                                      (LinearLeaf (Just beautiful))
+                                      (LinearLeaf (Just world))))
+                in flushState s `shouldBe`
+                   (LinearLeaf Nothing, [hello, big, beautiful, world])
+        it
+            "flushes and prunes the entire left half of a complete binary tree of size two if the entire left part is done" $
+            forAllUnchecked $ \(hello, world) ->
+                let s =
+                        LinearBranch
+                            (LinearBranch
+                                 (LinearLeaf (Just hello))
+                                 (LinearLeaf (Just world)))
+                            (LinearBranch LinearUnknown LinearUnknown)
+                    s' = LinearBranch LinearUnknown LinearUnknown
+                in flushState s `shouldBe` (s', [hello, world])
+        it
+            "flushes and prunes the correct part of the right half of the state when the left part is done and the right side isn't" $
+            forAllUnchecked $ \(hello, world) ->
+                let s =
+                        LinearBranch
+                            (LinearLeaf (Just hello))
+                            (LinearBranch
+                                 (LinearLeaf (Just world))
+                                 LinearUnknown)
+                    s' = LinearUnknown
+                in flushState s `shouldBe` (s', [hello, world])
+        it
+            "flushes and prunes the entire left half of a complete binary tree of size two if the entire left part is done" $
+            forAllUnchecked $ \(hello, beautiful, world) ->
+                let s =
+                        LinearBranch
+                            (LinearBranch
+                                 (LinearLeaf (Just hello))
+                                 (LinearLeaf (Just beautiful)))
+                            (LinearBranch
+                                 (LinearLeaf (Just world))
+                                 LinearUnknown)
+                    s' = LinearUnknown
+                in flushState s `shouldBe` (s', [hello, beautiful, world])
 
 outputShouldBe :: Zift () -> [ZiftToken] -> Expectation
 outputShouldBe func ls = outputShouldSatisfy func (== ls)

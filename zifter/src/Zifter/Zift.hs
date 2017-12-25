@@ -18,7 +18,6 @@ module Zifter.Zift
     , module Zifter.Zift.Types
     ) where
 
-import Control.Concurrent.STM (atomically, writeTChan)
 import Control.Monad
 import Control.Monad.IO.Class (liftIO)
 
@@ -30,7 +29,7 @@ import Zifter.OptParse.Types
 import Zifter.Zift.Types
 
 getContext :: Zift ZiftContext
-getContext = Zift $ pure . ZiftSuccess
+getContext = ZiftCtx
 
 -- | Get the root directory of the @zift.hs@ script that is being executed.
 getRootDir :: Zift (Path Abs Dir)
@@ -128,8 +127,8 @@ printWithColors :: [SGR] -> String -> Zift ()
 printWithColors commands str = addZiftOutput $ ZiftOutput commands str
 
 addZiftOutput :: ZiftOutput -> Zift ()
-addZiftOutput zo =
-    Zift $ \ctx -> do
-        atomically $
-            writeTChan (printChan ctx) $ TokenOutput (recursionList ctx) zo
-        pure $ ZiftSuccess ()
+addZiftOutput = ZiftPrint
+    -- Zift $ \ctx -> do
+    --     atomically $
+    --         writeTChan (printChan ctx) $ TokenOutput (recursionList ctx) zo
+    --     pure $ ZiftSuccess ()
