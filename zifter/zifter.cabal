@@ -66,6 +66,7 @@ test-suite zifter-test
     hs-source-dirs: test/
     other-modules:
         ZifterSpec
+        Zifter.Gen
         Zifter.ZiftSpec
         Zifter.Zift.Gen
         Zifter.OptParse.Gen
