@@ -43,11 +43,11 @@ deriving instance Generic SGR
 
 instance GenUnchecked SGR
 
-instance GenUnchecked LMR
+instance GenUnchecked LR
+
+instance GenUnchecked ZiftToken
 
 instance GenUnchecked ZiftOutput
-
-instance GenUnchecked ZiftState
 
 instance (Validity a) => Validity (RGB a) where
     validate RGB {..} =

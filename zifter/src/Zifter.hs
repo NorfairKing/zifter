@@ -1,5 +1,8 @@
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 -- | The main 'Zifter' module.
 --
@@ -46,13 +49,26 @@ module Zifter
       -- | You will most likely not need these
     , runZiftAuto
     , runZift
+    , ziftRunner
+    , outputPrinter
+    , LinearState(..) -- TODO Split  this into an other module
+    , prettyToken
+    , prettyState
+    , processToken
+    , addState
+    , flushState
+    , Buf(..)
+    , pruneState
+    , flushStateAll
     ) where
 
-import Control.Concurrent.Async (async, wait)
+import Control.Concurrent.Async
 import Control.Concurrent.STM
-       (atomically, newEmptyTMVar, newTChanIO, orElse, putTMVar,
-        readTChan, takeTMVar, tryReadTChan, writeTChan)
+import Control.Exception (SomeException, catch, displayException)
 import Control.Monad
+import Data.Maybe
+import Data.Monoid
+import GHC.Generics (Generic)
 import Path
 import Path.IO
 import Safe
@@ -130,45 +146,116 @@ runZiftAuto func sets = do
             , printChan = pchan
             , recursionList = []
             }
-    runZift ctx (func ctx) >>= exitWith
+    result <- runZift ctx (func ctx)
+    code <-
+        case result of
+            ZiftFailed err -> do
+                outputOne (setsOutputColor sets) $
+                    ZiftOutput [SetColor Foreground Dull Red] err
+                pure $ ExitFailure 1
+            ZiftSuccess () -> pure ExitSuccess
+    exitWith code
 
-runZift :: ZiftContext -> Zift () -> IO ExitCode
+runZift :: ZiftContext -> Zift a -> IO (ZiftResult a)
 runZift ctx zfunc = do
-    let pchan = printChan ctx
-        sets = settings ctx
     fmvar <- atomically newEmptyTMVar
-    let runner =
-            withSystemTempDir "zifter" $ \d ->
-                withCurrentDir d $ do
-                    (r, zs) <- zift zfunc ctx mempty
-                    result <-
-                        case r of
-                            ZiftFailed err -> do
-                                atomically $
-                                    writeTChan pchan $
-                                    ZiftOutput
-                                        [SetColor Foreground Dull Red]
-                                        err
-                                pure $ ExitFailure 1
-                            ZiftSuccess () -> pure ExitSuccess
-                    void $ tryFlushZiftBuffer ctx zs
-                    atomically $ putTMVar fmvar ()
-                    pure result
-    let outputOne :: ZiftOutput -> IO ()
-        outputOne (ZiftOutput commands str) = do
-            let color = setsOutputColor sets
-            when color $ setSGR commands
-            putStr str
-            when color $ setSGR [Reset]
-            putStr "\n" -- Because otherwise it doesn't work?
-            hFlush stdout
-    let outputAll = do
-            mout <- atomically $ tryReadTChan pchan
-            case mout of
-                Nothing -> pure ()
-                Just output -> do
-                    outputOne output
-                    outputAll
+    printerAsync <-
+        async $
+        outputPrinter (deriveOutputSets $ settings ctx) (printChan ctx) fmvar
+    runnerAsync <- async $ ziftRunner ctx fmvar zfunc
+    result <- wait runnerAsync
+    wait printerAsync
+    pure result
+
+ziftRunner :: ZiftContext -> TMVar () -> Zift a -> IO (ZiftResult a)
+ziftRunner ctx fmvar zfunc =
+    withSystemTempDir "zifter" $ \d ->
+        withCurrentDir d $ do
+            r <- interpretZift ctx zfunc
+            atomically $ putTMVar fmvar ()
+            pure r
+
+interpretZift :: forall a. ZiftContext -> Zift a -> IO (ZiftResult a)
+interpretZift = go
+  where
+    sendEmpty :: ZiftContext -> IO ()
+    sendEmpty ctx =
+        atomically $
+        writeTChan (printChan ctx) $ ZiftToken (recursionList ctx) Nothing
+    go :: forall b. ZiftContext -> Zift b -> IO (ZiftResult b)
+    go ctx (ZiftPure a) = do
+        sendEmpty ctx
+        pure $ pure a
+    go ctx ZiftCtx = do
+        sendEmpty ctx
+        pure $ pure ctx
+    go ctx (ZiftPrint zo) = do
+        atomically $
+            writeTChan (printChan ctx) $ ZiftToken (recursionList ctx) $ Just zo
+        pure $ pure ()
+    go ctx (ZiftFail s) = do
+        sendEmpty ctx
+        pure $ ZiftFailed s
+    go ctx (ZiftIO act) = do
+        sendEmpty ctx
+        (ZiftSuccess <$> act) `catch` handler
+      where
+        handler :: SomeException -> IO (ZiftResult b)
+        handler ex = pure (ZiftFailed $ displayException ex)
+    go ctx (ZiftFmap f za) = do
+        zr <- go ctx za
+        pure $ f <$> zr
+    go zc (ZiftApp faf af) = do
+        afaf <- async $ go (zc {recursionList = L : recursionList zc}) faf
+        aaf <- async $ go (zc {recursionList = R : recursionList zc}) af
+        efaa <- waitEither afaf aaf
+        let complete fa a = pure $ fa <*> a
+        case efaa of
+            Left far -> do
+                r <-
+                    case far of
+                        ZiftFailed s -> do
+                            cancel aaf
+                            pure $ ZiftFailed s
+                        _ -> do
+                            t2 <- wait aaf
+                            complete far t2
+                pure r
+            Right ar -> do
+                r <-
+                    case ar of
+                        ZiftFailed s -> do
+                            cancel afaf
+                            pure $ ZiftFailed s
+                        _ -> do
+                            t1 <- wait afaf
+                            complete t1 ar
+                pure r
+    go rd (ZiftBind fa mb) = do
+        ra <- go (rd {recursionList = L : recursionList rd}) fa
+        case ra of
+            ZiftSuccess a ->
+                go (rd {recursionList = R : recursionList rd}) $ mb a
+            ZiftFailed e -> pure $ ZiftFailed e
+
+deriveOutputSets :: Settings -> OutputSets
+deriveOutputSets Settings {..} =
+    OutputSets {outputColor = setsOutputColor, outputMode = setsOutputMode}
+
+data OutputSets = OutputSets
+    { outputColor :: Bool
+    , outputMode :: OutputMode
+    } deriving (Show, Eq)
+
+outputPrinter :: OutputSets -> TChan ZiftToken -> TMVar () -> IO ()
+outputPrinter OutputSets {..} =
+    (case outputMode of
+         OutputLinear -> outputLinear
+         OutputFast -> outputFast)
+        outputColor
+
+outputFast :: Bool -> TChan ZiftToken -> TMVar () -> IO ()
+outputFast color pchan fmvar =
     let printer = do
             mdone <-
                 atomically $
@@ -176,13 +263,144 @@ runZift ctx zfunc = do
             case mdone of
                 Left () -> outputAll
                 Right output -> do
-                    outputOne output
+                    outputOneToken output
                     printer
-    printerAsync <- async printer
-    runnerAsync <- async runner
-    result <- wait runnerAsync
-    wait printerAsync
-    pure result
+    in printer
+  where
+    outputOneToken :: ZiftToken -> IO ()
+    outputOneToken (ZiftToken _ Nothing) = pure ()
+    outputOneToken (ZiftToken _ (Just zo)) = outputOne color zo
+    outputAll = do
+        mout <- atomically $ tryReadTChan pchan
+        case mout of
+            Nothing -> pure ()
+            Just output -> do
+                outputOneToken output
+                outputAll
+
+outputLinear :: Bool -> TChan ZiftToken -> TMVar () -> IO ()
+outputLinear color pchan fmvar =
+    let printer st = do
+            mdone <-
+                atomically $
+                (Left <$> takeTMVar fmvar) `orElse` (Right <$> readTChan pchan)
+            case mdone of
+                Left () -> outputAll st
+                Right token ->
+                    case processToken st token of
+                        Nothing -> do
+                            putStrLn $ prettyToken token
+                            putStrLn $ prettyState st
+                            error
+                                "something went horribly wrong, the above should help"
+                        Just (st', buf) -> do
+                            outputBuf buf
+                            printer st'
+    in printer LinearUnknown
+  where
+    outputBuf :: Buf -> IO ()
+    outputBuf BufNotReady = pure ()
+    outputBuf (BufReady os) = mapM_ (outputOne color) os
+    outputAll st = do
+        mout <- atomically $ tryReadTChan pchan
+        case mout of
+            Nothing -> outputBuf $ flushStateAll st
+            Just token ->
+                case processToken st token of
+                    Nothing -> error "something went horribly wrong"
+                    Just (st', buf) -> do
+                        outputBuf buf
+                        outputAll st'
+
+data LinearState
+    = LinearUnknown
+    | LinearLeaf (Maybe ZiftOutput)
+    | LinearDone
+    | LinearBranch LinearState
+                   LinearState
+    deriving (Show, Eq, Generic)
+
+prettyToken :: ZiftToken -> String
+prettyToken (ZiftToken lr _) = concatMap show $ reverse lr
+
+prettyState :: LinearState -> String
+prettyState LinearUnknown = "u"
+prettyState LinearDone = "d"
+prettyState (LinearLeaf Nothing) = "n"
+prettyState (LinearLeaf (Just _)) = "m"
+prettyState (LinearBranch l1 l2) =
+    concat ["(", "b", " ", prettyState l1, " ", prettyState l2, ")"]
+
+processToken :: LinearState -> ZiftToken -> Maybe (LinearState, Buf)
+processToken ls zt = do
+    ls' <- addState ls zt
+    let (ls'', buf) = flushState ls'
+        ls''' = pruneState ls''
+    pure (ls''', buf)
+
+addState :: LinearState -> ZiftToken -> Maybe LinearState
+addState s (ZiftToken ls mzo) = go s $ reverse ls -- FIXME this is probably slow
+  where
+    u = LinearUnknown
+    go :: LinearState -> [LR] -> Maybe LinearState
+    go LinearUnknown (L:rest) = LinearBranch <$> go u rest <*> pure u
+    go LinearUnknown (R:rest) = LinearBranch u <$> go u rest
+    go LinearUnknown [] = Just $ LinearLeaf mzo
+    go (LinearBranch l r) (L:rest) = LinearBranch <$> go l rest <*> pure r
+    go (LinearBranch l r) (R:rest) = LinearBranch l <$> go r rest
+    go LinearDone _ = Nothing
+    go (LinearLeaf _) _ = Nothing
+        -- error $ unlines ["should never happen (1)", show zt, prettyState s]
+    go (LinearBranch _ _) [] = Nothing -- error $ "should never happen (2)" ++ show zt
+
+flushState :: LinearState -> (LinearState, Buf)
+flushState = go
+  where
+    go LinearUnknown = (LinearUnknown, BufNotReady)
+    go LinearDone = (LinearDone, BufReady [])
+    go (LinearLeaf Nothing) = (LinearDone, BufReady [])
+    go (LinearLeaf (Just zo)) = (LinearDone, BufReady [zo])
+    go (LinearBranch ls rs) =
+        let (ls', lbuf) = go ls
+            (rs', rbuf) = go rs
+        in case lbuf of
+               BufNotReady -> (LinearBranch ls' rs, lbuf)
+               BufReady _ -> (LinearBranch ls' rs', lbuf <> rbuf)
+
+data Buf
+    = BufNotReady
+    | BufReady [ZiftOutput]
+    deriving (Show, Eq, Generic)
+
+instance Monoid Buf where
+    mempty = BufReady []
+    BufNotReady `mappend` _ = BufNotReady
+    BufReady zos1 `mappend` BufReady zos2 = BufReady $ zos1 ++ zos2
+    BufReady zos1 `mappend` BufNotReady = BufReady zos1
+
+pruneState :: LinearState -> LinearState
+pruneState LinearDone = LinearDone
+pruneState (LinearLeaf Nothing) = LinearDone
+pruneState (LinearLeaf mzo) = LinearLeaf mzo
+pruneState LinearUnknown = LinearUnknown
+pruneState (LinearBranch ls rs) =
+    case (pruneState ls, pruneState rs) of
+        (LinearDone, LinearDone) -> LinearDone
+        (ls', rs') -> LinearBranch ls' rs'
+
+flushStateAll :: LinearState -> Buf
+flushStateAll LinearUnknown = mempty
+flushStateAll LinearDone = mempty
+flushStateAll (LinearLeaf mzo) = BufReady $ maybeToList mzo
+flushStateAll (LinearBranch lsl lsr) = flushStateAll lsl <> flushStateAll lsr
+
+outputOne :: Bool -> ZiftOutput -> IO ()
+outputOne color (ZiftOutput commands str) = do
+    when color $ setSGR commands
+    putStr str
+    when color $ setSGR [Reset]
+    putStr "\n" -- Because otherwise it doesn't work?
+    hFlush stdout
 
 runAsPreProcessor :: Zift () -> Zift ()
 runAsPreProcessor func = do

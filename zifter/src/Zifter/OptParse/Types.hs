@@ -16,8 +16,9 @@ data Command
     | CommandCheck
     deriving (Show, Eq)
 
-newtype Flags = Flags
+data Flags = Flags
     { flagsOutputColor :: Bool
+    , flagsOutputMode :: Maybe OutputMode
     } deriving (Show, Eq)
 
 data Configuration =
@@ -32,6 +33,12 @@ data Dispatch
     | DispatchCheck
     deriving (Show, Eq, Generic)
 
-newtype Settings = Settings
+data Settings = Settings
     { setsOutputColor :: Bool
+    , setsOutputMode :: OutputMode
     } deriving (Show, Eq, Generic)
+
+data OutputMode
+    = OutputLinear
+    | OutputFast
+    deriving (Show, Eq, Generic)

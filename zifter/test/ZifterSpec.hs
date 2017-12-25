@@ -12,7 +12,6 @@ import Path.IO
 
 import Control.Concurrent.STM
 import Data.GenValidity.Path ()
-import System.Exit (ExitCode(..))
 
 import Zifter
 import Zifter.OptParse.Gen ()
@@ -35,4 +34,4 @@ spec =
                     , printChan = pchan
                     , recursionList = []
                     }
-            runZift ctx (pure ()) `shouldReturn` ExitSuccess
+            runZift ctx (pure ()) `shouldReturn` ZiftSuccess ()
