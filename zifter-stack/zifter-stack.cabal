@@ -1,0 +1,39 @@
+-- This file has been generated from package.yaml by hpack version 0.20.0.
+--
+-- see: https://github.com/sol/hpack
+--
+-- hash: 2f6e2f1f682493884a0185b2d6642429ee1da345cb50a36f5aef008a4f0908be
+
+name:           zifter-stack
+version:        0.0.0.7
+synopsis:       zifter-stack
+description:    zifter-stack
+category:       Zift
+homepage:       http://cs-syd.eu
+author:         Tom Sydney Kerckhove
+maintainer:     syd.kerckhove@gmail.com
+copyright:      Copyright: (c) 2017 Tom Sydney Kerckhove
+license:        MIT
+license-file:   LICENSE
+build-type:     Simple
+cabal-version:  >= 1.10
+
+library
+  hs-source-dirs:
+      src/
+  ghc-options: -Wall
+  build-depends:
+      Cabal >=1.24 && <2.1
+    , base >=4.9 && <=5
+    , directory
+    , filepath >=1.4 && <1.5
+    , path
+    , path-io
+    , process
+    , safe >=0.3 && <0.4
+    , zifter >=0.0 && <0.1
+  exposed-modules:
+      Zifter.Stack
+  other-modules:
+      Paths_zifter_stack
+  default-language: Haskell2010

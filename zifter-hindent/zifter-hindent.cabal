@@ -1,0 +1,38 @@
+-- This file has been generated from package.yaml by hpack version 0.20.0.
+--
+-- see: https://github.com/sol/hpack
+--
+-- hash: f8280e6afcce228b2c2091e1583dad83d6b5f5943f511e7c4468b38da7be3b34
+
+name:           zifter-hindent
+version:        0.0.0.2
+synopsis:       zifter-hindent
+description:    zifter-hindent
+category:       Zift
+homepage:       http://cs-syd.eu
+author:         Tom Sydney Kerckhove
+maintainer:     syd.kerckhove@gmail.com
+copyright:      Copyright: (c) 2017 Tom Sydney Kerckhove
+license:        MIT
+license-file:   LICENSE
+build-type:     Simple
+cabal-version:  >= 1.10
+
+library
+  hs-source-dirs:
+      src/
+  ghc-options: -Wall
+  build-depends:
+      base >=4.9 && <=5
+    , directory
+    , filepath >=1.4 && <1.5
+    , path
+    , path-io
+    , process
+    , safe >=0.3 && <0.4
+    , zifter >=0.0.1.2 && <0.1
+  exposed-modules:
+      Zifter.Hindent
+  other-modules:
+      Paths_zifter_hindent
+  default-language: Haskell2010
