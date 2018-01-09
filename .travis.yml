@@ -26,4 +26,4 @@ install:
 script:
   - git --version
   - stack --version
-  - travis_wait ./zift.hs run
+  - travis_wait 20 ./zift.hs run
