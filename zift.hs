@@ -18,7 +18,7 @@ main :: IO ()
 main =
     ziftWith $ do
         recursiveZift
-        preprocessor $ hindentZiftExcept ["zifter-stack/src/Zifter/Stack.hs"]
+        preprocessor hindentZift
         prechecker gitAddAllZift
         checker $ do
             hlintZift
