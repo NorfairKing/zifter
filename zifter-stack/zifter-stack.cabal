@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 2f6e2f1f682493884a0185b2d6642429ee1da345cb50a36f5aef008a4f0908be
+-- hash: cbd547d2720ec13ecff5ef18db2d9fa001b3117fdf8aa20fc5409a26a21a1992
 
 name:           zifter-stack
 version:        0.0.0.7
@@ -35,5 +35,30 @@ library
   exposed-modules:
       Zifter.Stack
   other-modules:
+      Paths_zifter_stack
+  default-language: Haskell2010
+
+test-suite zifter-stack-test
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  hs-source-dirs:
+      test/
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N -Wall
+  build-depends:
+      Cabal >=1.24 && <2.1
+    , base >=4.9 && <=5
+    , directory
+    , filepath >=1.4 && <1.5
+    , hspec
+    , path
+    , path-io
+    , process
+    , safe >=0.3 && <0.4
+    , stm
+    , zifter >=0.0 && <0.1
+    , zifter-stack
+  other-modules:
+      TestImport
+      Zifter.StackSpec
       Paths_zifter_stack
   default-language: Haskell2010

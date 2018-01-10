@@ -23,3 +23,17 @@ library:
   ghc-options: -Wall
   exposed-modules:
   - Zifter.Stack
+
+tests:
+  zifter-stack-test:
+    main: Spec.hs
+    source-dirs: test/
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    - -Wall
+    dependencies:
+    - zifter-stack
+    - hspec
+    - stm
