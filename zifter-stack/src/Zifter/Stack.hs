@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP #-}
+
 module Zifter.Stack where
 
 import Control.Monad
@@ -23,7 +24,6 @@ import Distribution.Verbosity
 #if MIN_VERSION_Cabal(2,0,0)
 import Distribution.Types.UnqualComponentName
 #endif
-
 import Zifter.Zift
 
 stackBuildZift :: Zift ()
@@ -97,9 +97,7 @@ stackGetPackageTargetTuplesAccordingToCabalFiles = do
             filter (not . hidden) $ filter ((== ".cabal") . fileExtension) fs
     (concat <$>) $
         forM cabalFiles $ \cabalFile -> do
-            pd <-
-                liftIO $ readPackage
-                    deafening $ toFilePath cabalFile
+            pd <- liftIO $ readPackage deafening $ toFilePath cabalFile
             let packageDesc = flattenPackageDescription pd
                 name = unPackageName $ pkgName $ package packageDesc
                 libname = name ++ ":lib"
@@ -108,64 +106,70 @@ stackGetPackageTargetTuplesAccordingToCabalFiles = do
                         Nothing -> []
                         Just _ -> [libname]
                 testnames =
-                    map (((name ++ ":test:") ++) .  testComponentName
-                        ) $
+                    map (((name ++ ":test:") ++) . testComponentName) $
                     testSuites packageDesc
             pure [(name, lib ++ testnames)]
-  where
-    readPackage =
 #if MIN_VERSION_Cabal(2,0,0)
-                    readGenericPackageDescription
+readPackage :: Verbosity -> FilePath -> IO GenericPackageDescription
+readPackage = readGenericPackageDescription
 #else
-                    readPackageDescription
-#endif
-    testComponentName =
-#if MIN_VERSION_Cabal(2,0,0)
-                            unUnqualComponentName . testName
-#else
-                            testName
+readPackage = readPackageDescription
 #endif
 
+#if MIN_VERSION_Cabal(2,0,0)
+testComponentName :: TestSuite -> String
+testComponentName = unUnqualComponentName . testName
+#else
+testComponentName = testName
+#endif
 stackBuild :: Zift ()
 stackBuild = do
-    rd <- getRootDir
-    let stack :: String -> Zift ()
-        stack args = do
-            let buildCmd = unwords ["stack", args]
-            (_, mouth, merrh, bph) <-
-                liftIO $
-                createProcess
-                    ((shell buildCmd)
-                     { cwd = Just $ toFilePath rd
-                     , std_out = CreatePipe
-                     , std_err = CreatePipe
-                     })
-            bec <- liftIO $ waitForProcess bph
-            case mouth of
-                Nothing -> pure ()
-                Just outh -> liftIO (hGetContents outh) >>= printZift
-            case merrh of
-                Nothing -> pure ()
-                Just errh -> liftIO (hGetContents errh) >>= printZift
-            case bec of
-                ExitFailure c ->
-                    fail $ unwords [buildCmd, "failed with exit code", show c]
-                ExitSuccess ->
-                    printPreprocessingDone $ unwords [buildCmd, "succeeded."]
     tups <- stackGetPackageTargetTuples
-    stack "build"
-    forM_ tups $ \(package_, targets) -> do
-        stack $ unwords ["clean", package_]
-        forM_ targets $ \target -> do
-            stack $ unwords ["build", target, "--pedantic"]
-            stack $ unwords ["build", target, "--pedantic", "--haddock"]
-            stack $ unwords
-                [ "build"
-                , target
-                , "--pedantic"
-                , "--test"
-                , "--test-arguments='--fail-fast --seed=42'"
-                ]
+    stack "build" -- To get the dependencies done first
+    mapM_ (uncurry bePedanticAboutPackage) tups
+
+stack :: String -> Zift ()
+stack args = do
+    rd <- getRootDir
+    let buildCmd = unwords ["stack", args]
+    (_, mouth, merrh, bph) <-
+        liftIO $
+        createProcess
+            ((shell buildCmd)
+             { cwd = Just $ toFilePath rd
+             , std_out = CreatePipe
+             , std_err = CreatePipe
+             })
+    bec <- liftIO $ waitForProcess bph
+    case mouth of
+        Nothing -> pure ()
+        Just outh -> liftIO (hGetContents outh) >>= printZift
+    case merrh of
+        Nothing -> pure ()
+        Just errh -> liftIO (hGetContents errh) >>= printZift
+    case bec of
+        ExitFailure c ->
+            fail $ unwords [buildCmd, "failed with exit code", show c]
+        ExitSuccess -> printPreprocessingDone $ unwords [buildCmd, "succeeded."]
 
 hidden :: Path Abs t -> Bool
 hidden = any ((Just '.' ==) . headMay) . FP.splitPath . toFilePath
+
+bePedanticAboutPackage :: String -> [String] -> Zift ()
+bePedanticAboutPackage package_ targets = do
+    stack $ unwords ["clean", package_]
+    mapM_ bePedanticAboutTarget targets
+
+bePedanticAboutTarget :: String -> Zift ()
+bePedanticAboutTarget target = do
+    stack $ unwords ["build", target, "--pedantic"]
+    stack $ unwords ["build", target, "--pedantic", "--haddock"]
+    stack $
+        unwords
+            [ "build"
+            , target
+            , "--pedantic"
+            , "--test"
+            , "--test-arguments='--fail-fast --seed=42'"
+            ]
+    stack $ unwords ["build", target, "--pedantic", "--bench"]
