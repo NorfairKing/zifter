@@ -5,17 +5,9 @@ module Zifter.ZiftSpec
     ( spec
     ) where
 
-import Test.Hspec
-import Test.QuickCheck
-import Test.Validity
-
-import Data.GenValidity.Path ()
-import Data.Maybe
-import Data.Monoid
+import TestImport
 
 import Control.Concurrent.STM
-
-import Path.IO
 
 import Zifter
 import Zifter.OptParse

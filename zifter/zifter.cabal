@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 11a0f96bafa25f0018012a99edfb7b273a7debb83b0e54bc34ba969b720fad0a
+-- hash: f9aa69033307ec1686474ad81e6f4125d97b8654a377983a319a92aa001c1b99
 
 name:           zifter
 version:        0.0.1.4
@@ -74,6 +74,7 @@ test-suite zifter-test
     , stm
     , zifter
   other-modules:
+      TestImport
       Zifter.Gen
       Zifter.OptParse.Gen
       Zifter.Zift.Gen

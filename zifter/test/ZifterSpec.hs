@@ -4,14 +4,9 @@ module ZifterSpec
     ( spec
     ) where
 
-import Test.Hspec
-import Test.QuickCheck
-import Test.Validity
-
-import Path.IO
+import TestImport
 
 import Control.Concurrent.STM
-import Data.GenValidity.Path ()
 
 import Zifter
 import Zifter.OptParse.Gen ()
