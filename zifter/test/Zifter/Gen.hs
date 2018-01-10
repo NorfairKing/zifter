@@ -2,7 +2,7 @@
 
 module Zifter.Gen where
 
-import Data.GenValidity
+import TestImport
 
 import Zifter
 import Zifter.Zift.Gen ()
