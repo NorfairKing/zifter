@@ -2,9 +2,9 @@
 
 module Zifter.OptParse.Gen where
 
-import Zifter.OptParse.Types
+import TestImport
 
-import Test.Validity
+import Zifter.OptParse.Types
 
 instance GenUnchecked OutputMode
 

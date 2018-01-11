@@ -3,13 +3,16 @@
 module Zifter.Recurse
     ( recursiveZift
     , recursively
+    , hiddenIn
     ) where
 
 import Control.Monad
 import Control.Monad.IO.Class
+import Data.List
 import Path
 import Path.IO
 import System.Exit
+import qualified System.FilePath as FP
 import System.IO
 import System.Process
 
@@ -109,19 +112,11 @@ runZiftScript scriptPath command = do
 findZiftFilesRecursively :: Zift [Path Abs File]
 findZiftFilesRecursively = do
     rd <- getRootDir
-    let filterZiftFiles = filter ((== $(mkRelFile "zift.hs")) . filename) -- TODO generalise to given predicate
-    let recurser ad dirs files =
-            if ad == rd
-                then pure $ WalkExclude []
-                else do
-                    let ziftFiles = filterZiftFiles files
-                    case ziftFiles of
-                        [] -> pure $ WalkExclude [] -- No zift files found, recurse further downward.
-                        -- Zift files found, run each of them but don't recurse further. That's their job.
-                        _ -> pure $ WalkExclude dirs
-    let outputWriter ad _ files =
-            pure $
-            if ad == rd
-                then []
-                else filterZiftFiles files
-    walkDirAccum (Just recurser) outputWriter rd
+    fs <- findFiles [rd] $(mkRelFile "zift.hs")
+    pure $ filter (not . hiddenIn rd) fs
+
+hiddenIn :: Path Abs Dir -> Path Abs File -> Bool
+hiddenIn rp af =
+    case stripProperPrefix rp af of
+        Nothing -> True
+        Just rf -> any (isPrefixOf ".") $ FP.splitDirectories $ fromRelFile rf
