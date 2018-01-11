@@ -50,13 +50,13 @@ stackCheckAndPrintVersion = do
 data Pkg =
     Pkg String
         [Target]
-    deriving (Show, Eq)
+    deriving (Show, Eq, Ord)
 
 data Target
     = Lib String
     | Test String
     | Bench String
-    deriving (Show, Eq)
+    deriving (Show, Eq, Ord)
 
 stackGetPackages :: Zift [Pkg]
 stackGetPackages =
