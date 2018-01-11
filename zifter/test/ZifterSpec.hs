@@ -4,15 +4,9 @@ module ZifterSpec
     ( spec
     ) where
 
-import Test.Hspec
-import Test.QuickCheck
-import Test.Validity
-
-import Path.IO
+import TestImport
 
 import Control.Concurrent.STM
-import Data.GenValidity.Path ()
-import System.Exit (ExitCode(..))
 
 import Zifter
 import Zifter.OptParse.Gen ()
@@ -35,4 +29,4 @@ spec =
                     , printChan = pchan
                     , recursionList = []
                     }
-            runZift ctx (pure ()) `shouldReturn` ExitSuccess
+            runZift ctx (pure ()) `shouldReturn` ZiftSuccess ()

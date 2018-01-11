@@ -29,7 +29,7 @@ import Zifter.OptParse.Types
 import Zifter.Zift.Types
 
 getContext :: Zift ZiftContext
-getContext = Zift $ \zc st -> pure (ZiftSuccess zc, st)
+getContext = ZiftCtx
 
 -- | Get the root directory of the @zift.hs@ script that is being executed.
 getRootDir :: Zift (Path Abs Dir)
@@ -127,7 +127,8 @@ printWithColors :: [SGR] -> String -> Zift ()
 printWithColors commands str = addZiftOutput $ ZiftOutput commands str
 
 addZiftOutput :: ZiftOutput -> Zift ()
-addZiftOutput zo =
-    Zift $ \_ st -> do
-        let st' = ZiftState {bufferedOutput = zo : bufferedOutput st}
-        pure (ZiftSuccess (), st')
+addZiftOutput = ZiftPrint
+    -- Zift $ \ctx -> do
+    --     atomically $
+    --         writeTChan (printChan ctx) $ TokenOutput (recursionList ctx) zo
+    --     pure $ ZiftSuccess ()

@@ -1,0 +1,23 @@
+name: zifter-hlint
+version: '0.0.0.1'
+synopsis: zifter-hlint
+description: zifter-hlint
+category: Zift
+author: Tom Sydney Kerckhove
+maintainer: syd.kerckhove@gmail.com
+copyright: ! 'Copyright: (c) 2017 Tom Sydney Kerckhove'
+license: MIT
+homepage: http://cs-syd.eu
+dependencies:
+- base >=4.9 && <=5
+- filepath >=1.4 && <1.5
+- hlint >=1.9.35 && <2.1
+- path
+- path-io
+- safe >=0.3 && <0.4
+- zifter >=0.0 && <0.1
+library:
+  source-dirs: src/
+  ghc-options: -Wall
+  exposed-modules:
+  - Zifter.Hlint

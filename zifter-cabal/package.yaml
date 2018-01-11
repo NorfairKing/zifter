@@ -1,0 +1,24 @@
+name: zifter-cabal
+version: '0.0.0.3'
+synopsis: zifter-cabal
+description: zifter-cabal
+category: Zift
+author: Tom Sydney Kerckhove
+maintainer: syd.kerckhove@gmail.com
+copyright: ! 'Copyright: (c) 2017 Tom Sydney Kerckhove'
+license: MIT
+homepage: http://cs-syd.eu
+dependencies:
+- base >=4.9 && <=5
+- process
+- filepath >=1.4 && <1.5
+- directory
+- zifter >=0.0.1.2 && <0.1
+- path
+- path-io
+- safe >=0.3 && <0.4
+library:
+  source-dirs: src/
+  ghc-options: -Wall
+  exposed-modules:
+  - Zifter.Cabal

@@ -1,30 +1,37 @@
-name: zifter-hlint
-version: 0.0.0.1
-cabal-version: >=1.10
-build-type: Simple
-license: MIT
-license-file: LICENSE
-copyright: Copyright: (c) 2017 Tom Sydney Kerckhove
-maintainer: syd.kerckhove@gmail.com
-homepage: http://cs-syd.eu
-synopsis: zifter-hlint
-description:
-    zifter-hlint
-category: Zift
-author: Tom Sydney Kerckhove
+-- This file has been generated from package.yaml by hpack version 0.20.0.
+--
+-- see: https://github.com/sol/hpack
+--
+-- hash: a3b0262683b537a6976c73093d75dff38b883684c16c7a6d2282c6c38ec05b84
+
+name:           zifter-hlint
+version:        0.0.0.1
+synopsis:       zifter-hlint
+description:    zifter-hlint
+category:       Zift
+homepage:       http://cs-syd.eu
+author:         Tom Sydney Kerckhove
+maintainer:     syd.kerckhove@gmail.com
+copyright:      Copyright: (c) 2017 Tom Sydney Kerckhove
+license:        MIT
+license-file:   LICENSE
+build-type:     Simple
+cabal-version:  >= 1.10
 
 library
-    exposed-modules:
-        Zifter.Hlint
-    build-depends:
-        base >=4.9 && <=5,
-        filepath >=1.4 && <1.5,
-        hlint >=1.9.35 && <2.1,
-        path -any,
-        path-io -any,
-        safe >=0.3 && <0.4,
-        zifter >=0.0 && <0.1
-    default-language: Haskell2010
-    hs-source-dirs: src/
-    ghc-options: -Wall
-
+  hs-source-dirs:
+      src/
+  ghc-options: -Wall
+  build-depends:
+      base >=4.9 && <=5
+    , filepath >=1.4 && <1.5
+    , hlint >=1.9.35 && <2.1
+    , path
+    , path-io
+    , safe >=0.3 && <0.4
+    , zifter >=0.0 && <0.1
+  exposed-modules:
+      Zifter.Hlint
+  other-modules:
+      Paths_zifter_hlint
+  default-language: Haskell2010

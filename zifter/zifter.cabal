@@ -1,72 +1,85 @@
-name: zifter
-version: 0.0.1.4
-cabal-version: >=1.10
-build-type: Simple
-license: MIT
-license-file: LICENSE
-copyright: Copyright: (c) 2017 Tom Sydney Kerckhove
-maintainer: syd.kerckhove@gmail.com
-homepage: http://cs-syd.eu
-synopsis: zifter
-description:
-    zifter
-category: Zift
-author: Tom Sydney Kerckhove
+-- This file has been generated from package.yaml by hpack version 0.20.0.
+--
+-- see: https://github.com/sol/hpack
+--
+-- hash: 9ca3407b88ca698c2878dbd6d42d5932870a22eb0254ab33d4d816d255d85ffc
+
+name:           zifter
+version:        0.0.1.5
+synopsis:       zifter
+description:    zifter
+category:       Zift
+homepage:       http://cs-syd.eu
+author:         Tom Sydney Kerckhove
+maintainer:     syd.kerckhove@gmail.com
+copyright:      Copyright: (c) 2017 Tom Sydney Kerckhove
+license:        MIT
+license-file:   LICENSE
+build-type:     Simple
+cabal-version:  >= 1.10
 
 library
-    exposed-modules:
-        Zifter
-        Zifter.OptParse
-        Zifter.OptParse.Types
-        Zifter.Recurse
-        Zifter.Script
-        Zifter.Script.Types
-        Zifter.Setup
-        Zifter.Setup.Types
-        Zifter.Types
-        Zifter.Zift
-        Zifter.Zift.Types
-    build-depends:
-        base >=4.9 && <=5,
-        ansi-terminal >=0.6 && <0.8,
-        async >=2.1 && <2.2,
-        directory >=1.2 && <1.4,
-        exceptions >=0.8 && <0.9,
-        filepath >=1.4 && <1.5,
-        optparse-applicative >=0.13 && <0.15,
-        path >=0.5 && <0.7,
-        path-io >1.2 && <1.4,
-        process >=1.4 && <1.7,
-        safe >=0.3 && <0.4,
-        stm >=2.4 && <2.5,
-        validity >=0.3 && <0.5,
-        validity-path >=0.1 && <0.3
-    default-language: Haskell2010
-    hs-source-dirs: src/
-    ghc-options: -Wall
+  hs-source-dirs:
+      src/
+  ghc-options: -Wall
+  build-depends:
+      ansi-terminal >=0.6 && <0.8
+    , async >=2.1 && <2.2
+    , base >=4.9 && <=5
+    , directory >=1.2 && <1.4
+    , exceptions >=0.8 && <0.9
+    , filepath >=1.4 && <1.5
+    , optparse-applicative >=0.13 && <0.15
+    , path >=0.6 && <0.7
+    , path-io >1.3 && <1.4
+    , process >=1.4 && <1.7
+    , safe >=0.3 && <0.4
+    , stm >=2.4 && <2.5
+    , validity >=0.3 && <0.5
+    , validity-path >=0.1 && <0.3
+  exposed-modules:
+      Zifter
+      Zifter.OptParse
+      Zifter.OptParse.Types
+      Zifter.Recurse
+      Zifter.Script
+      Zifter.Script.Types
+      Zifter.Setup
+      Zifter.Setup.Types
+      Zifter.Types
+      Zifter.Zift
+      Zifter.Zift.Types
+  other-modules:
+      Paths_zifter
+  default-language: Haskell2010
 
 test-suite zifter-test
-    type: exitcode-stdio-1.0
-    main-is: Spec.hs
-    build-depends:
-        base >=4.9 && <=5,
-        zifter -any,
-        QuickCheck >=2.9 && <2.11,
-        colour >=2.3 && <2.4,
-        genvalidity >=0.3 && <0.5,
-        genvalidity-hspec >=0.3 && <0.6,
-        genvalidity-path >=0.1 && <0.3,
-        hspec -any,
-        path -any,
-        path-io -any,
-        stm -any,
-        ansi-terminal -any,
-        directory -any
-    default-language: Haskell2010
-    hs-source-dirs: test/
-    other-modules:
-        ZifterSpec
-        Zifter.ZiftSpec
-        Zifter.Zift.Gen
-        Zifter.OptParse.Gen
-    ghc-options: -threaded -rtsopts -with-rtsopts=-N -Wall
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  hs-source-dirs:
+      test/
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N -Wall
+  build-depends:
+      QuickCheck >=2.9 && <2.11
+    , ansi-terminal
+    , base >=4.9 && <=5
+    , colour >=2.3 && <2.4
+    , directory
+    , genvalidity >=0.3 && <0.5
+    , genvalidity-hspec >=0.3 && <0.6
+    , genvalidity-path >=0.1 && <0.3
+    , hspec
+    , path
+    , path-io
+    , stm
+    , zifter
+  other-modules:
+      TestImport
+      Zifter.Gen
+      Zifter.OptParse.Gen
+      Zifter.RecurseSpec
+      Zifter.Zift.Gen
+      Zifter.ZiftSpec
+      ZifterSpec
+      Paths_zifter
+  default-language: Haskell2010
