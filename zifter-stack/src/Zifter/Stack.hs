@@ -6,7 +6,7 @@ import Control.Monad
 import Control.Monad.IO.Class
 import Data.Function (on)
 import Data.List
-       (groupBy, intersect, isInfixOf, isPrefixOf, sortOn)
+       (groupBy, intersect, isInfixOf, isPrefixOf, isSuffixOf, sortOn)
 import Data.Maybe (mapMaybe)
 import Path
 import Path.IO
@@ -47,24 +47,34 @@ stackCheckAndPrintVersion = do
         ExitFailure c -> fail $ unwords [cmd, "failed with exit code", show c]
         ExitSuccess -> pure ()
 
-stackGetPackageTargetTuples :: Zift [(String, [String])]
-stackGetPackageTargetTuples = do
-    sps <- stackGetPackageTargetTuplesAccordingToStackIDE
-    cps <- stackGetPackageTargetTuplesAccordingToCabalFiles
-    pure $ combine $ uncombine sps `intersect` uncombine cps
+data Pkg =
+    Pkg String
+        [Target]
+    deriving (Show, Eq)
 
-combine :: Ord a => [(a, b)] -> [(a, [b])]
-combine =
-    mapMaybe (\tups -> (,) <$> (fst <$> headMay tups) <*> pure (map snd tups)) .
-    groupBy ((==) `on` fst) . sortOn fst
+data Target
+    = Lib String
+    | Test String
+    | Bench String
+    deriving (Show, Eq)
 
-uncombine :: Ord a => [(a, [b])] -> [(a, b)]
-uncombine xs = do
-    (a, bs) <- xs
-    b <- bs
-    pure (a, b)
+stackGetPackages :: Zift [Pkg]
+stackGetPackages =
+    combinePkgs <$> stackGetPackageTargetTuplesAccordingToStackIDE <*>
+    stackGetPackageTargetTuplesAccordingToCabalFiles
 
-stackGetPackageTargetTuplesAccordingToStackIDE :: Zift [(String, [String])]
+combinePkgs :: [Pkg] -> [Pkg] -> [Pkg]
+combinePkgs ps1 ps2 = unTups $ intersect (toTups ps1) (toTups ps2)
+  where
+    toTups :: [Pkg] -> [(String, Target)]
+    toTups = concatMap (\(Pkg p ts) -> map ((,) p) ts)
+    unTups :: [(String, Target)] -> [Pkg]
+    unTups =
+        mapMaybe
+            (\tups -> Pkg <$> (fst <$> headMay tups) <*> pure (map snd tups)) .
+        groupBy ((==) `on` fst) . sortOn fst
+
+stackGetPackageTargetTuplesAccordingToStackIDE :: Zift [Pkg]
 stackGetPackageTargetTuplesAccordingToStackIDE = do
     rd <- getRootDir
     let getErrFrom cmd = do
@@ -86,29 +96,40 @@ stackGetPackageTargetTuplesAccordingToStackIDE = do
     outp <- getErrFrom "stack ide packages"
     let targets = lines outt
     let packages = lines outp
-    pure $ flip map packages $ \t -> (t, filter (isPrefixOf t) targets)
+    let isLib = isSuffixOf ":lib"
+    let isTest = isInfixOf ":test:"
+    let isBench = isInfixOf ":bench:"
+    pure $
+        flip map packages $ \p ->
+            let relevantTargets = filter (isPrefixOf p) targets
+            in Pkg p $
+               map Lib (filter isLib relevantTargets) ++
+               map Test (filter isTest relevantTargets) ++
+               map Bench (filter isBench relevantTargets)
 
-stackGetPackageTargetTuplesAccordingToCabalFiles :: Zift [(String, [String])]
+stackGetPackageTargetTuplesAccordingToCabalFiles :: Zift [Pkg]
 stackGetPackageTargetTuplesAccordingToCabalFiles = do
     rd <- getRootDir
     (_, fs) <- liftIO $ listDirRecur rd
     let cabalFiles =
             filter (not . isInfixOf ".stack-work" . toFilePath) $
             filter (not . hidden) $ filter ((== ".cabal") . fileExtension) fs
-    (concat <$>) $
-        forM cabalFiles $ \cabalFile -> do
-            pd <- liftIO $ readPackage deafening $ toFilePath cabalFile
-            let packageDesc = flattenPackageDescription pd
-                name = unPackageName $ pkgName $ package packageDesc
-                libname = name ++ ":lib"
-                lib =
-                    case library packageDesc of
-                        Nothing -> []
-                        Just _ -> [libname]
-                testnames =
-                    map (((name ++ ":test:") ++) . testComponentName) $
-                    testSuites packageDesc
-            pure [(name, lib ++ testnames)]
+    forM cabalFiles $ \cabalFile -> do
+        pd <- liftIO $ readPackage deafening $ toFilePath cabalFile
+        let packageDesc = flattenPackageDescription pd
+            name = unPackageName $ pkgName $ package packageDesc
+            libname = name ++ ":lib"
+            lib =
+                case library packageDesc of
+                    Nothing -> []
+                    Just _ -> [Lib libname]
+            testnames =
+                map (((name ++ ":test:") ++) . testComponentName) $
+                testSuites packageDesc
+            benchnames =
+                map (((name ++ ":bench:") ++) . benchComponentName) $
+                benchmarks packageDesc
+        pure $ Pkg name $ lib ++ map Test testnames ++ map Bench benchnames
 #if MIN_VERSION_Cabal(2,0,0)
 readPackage :: Verbosity -> FilePath -> IO GenericPackageDescription
 readPackage = readGenericPackageDescription
@@ -122,11 +143,18 @@ testComponentName = unUnqualComponentName . testName
 #else
 testComponentName = testName
 #endif
+
+#if MIN_VERSION_Cabal(2,0,0)
+benchComponentName :: Benchmark -> String
+benchComponentName = unUnqualComponentName . benchmarkName
+#else
+benchComponentName = benchmarkName
+#endif
 stackBuild :: Zift ()
 stackBuild = do
-    tups <- stackGetPackageTargetTuples
+    tups <- stackGetPackages
     stack "build" -- To get the dependencies done first
-    mapM_ (uncurry bePedanticAboutPackage) tups
+    mapM_ bePedanticAboutPackage tups
 
 stack :: String -> Zift ()
 stack args = do
@@ -155,13 +183,16 @@ stack args = do
 hidden :: Path Abs t -> Bool
 hidden = any ((Just '.' ==) . headMay) . FP.splitPath . toFilePath
 
-bePedanticAboutPackage :: String -> [String] -> Zift ()
-bePedanticAboutPackage package_ targets = do
+bePedanticAboutPackage :: Pkg -> Zift ()
+bePedanticAboutPackage (Pkg package_ targets) = do
     stack $ unwords ["clean", package_]
     mapM_ bePedanticAboutTarget targets
 
-bePedanticAboutTarget :: String -> Zift ()
-bePedanticAboutTarget target = do
+bePedanticAboutTarget :: Target -> Zift ()
+bePedanticAboutTarget (Lib target) = do
+    stack $ unwords ["build", target, "--pedantic"]
+    stack $ unwords ["build", target, "--pedantic", "--haddock"]
+bePedanticAboutTarget (Test target) = do
     stack $ unwords ["build", target, "--pedantic"]
     stack $ unwords ["build", target, "--pedantic", "--haddock"]
     stack $
@@ -172,4 +203,7 @@ bePedanticAboutTarget target = do
             , "--test"
             , "--test-arguments='--fail-fast --seed=42'"
             ]
+bePedanticAboutTarget (Bench target) = do
+    stack $ unwords ["build", target, "--pedantic"]
+    stack $ unwords ["build", target, "--pedantic", "--haddock"]
     stack $ unwords ["build", target, "--pedantic", "--bench"]

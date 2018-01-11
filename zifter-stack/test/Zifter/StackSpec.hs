@@ -17,16 +17,19 @@ spec :: Spec
 spec =
     describe "stackGetPackageTargetTuples" $
     it "finds the right packages for this repository" $ do
-        tups <- runZiftInRepo stackGetPackageTargetTuples
+        tups <- runZiftInRepo stackGetPackages
         tups `shouldBe`
-            [ ("zifter", ["zifter:lib", "zifter:test:zifter-test"])
-            , ("zifter-cabal", ["zifter-cabal:lib"])
-            , ("zifter-git", ["zifter-git:lib"])
-            , ("zifter-google-java-format", ["zifter-google-java-format:lib"])
-            , ("zifter-hindent", ["zifter-hindent:lib"])
-            , ("zifter-hlint", ["zifter-hlint:lib"])
-            , ( "zifter-stack"
-              , ["zifter-stack:lib", "zifter-stack:test:zifter-stack-test"])
+            [ Pkg "zifter" [Lib "zifter:lib", Test "zifter:test:zifter-test"]
+            , Pkg "zifter-cabal" [Lib "zifter-cabal:lib"]
+            , Pkg "zifter-git" [Lib "zifter-git:lib"]
+            , Pkg "zifter-google-java-format"
+                  [Lib "zifter-google-java-format:lib"]
+            , Pkg "zifter-hindent" [Lib "zifter-hindent:lib"]
+            , Pkg "zifter-hlint" [Lib "zifter-hlint:lib"]
+            , Pkg "zifter-stack"
+                  [ Lib "zifter-stack:lib"
+                  , Test "zifter-stack:test:zifter-stack-test"
+                  ]
             ]
 
 runZiftInRepo :: Zift a -> IO a
