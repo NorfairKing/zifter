@@ -50,13 +50,13 @@ stackCheckAndPrintVersion = do
 data Pkg =
     Pkg String
         [Target]
-    deriving (Show, Eq)
+    deriving (Show, Eq, Ord)
 
 data Target
     = Lib String
     | Test String
     | Bench String
-    deriving (Show, Eq)
+    deriving (Show, Eq, Ord)
 
 stackGetPackages :: Zift [Pkg]
 stackGetPackages =
@@ -193,8 +193,9 @@ bePedanticAboutTarget (Lib target) = do
     stack $ unwords ["build", target, "--pedantic"]
     stack $ unwords ["build", target, "--pedantic", "--haddock"]
 bePedanticAboutTarget (Test target) = do
-    stack $ unwords ["build", target, "--pedantic"]
-    stack $ unwords ["build", target, "--pedantic", "--haddock"]
+    stack $ unwords ["build", target, "--pedantic", "--no-run-tests"]
+    stack $
+        unwords ["build", target, "--pedantic", "--haddock", "--no-run-tests"]
     stack $
         unwords
             [ "build"
@@ -204,6 +205,8 @@ bePedanticAboutTarget (Test target) = do
             , "--test-arguments='--fail-fast --seed=42'"
             ]
 bePedanticAboutTarget (Bench target) = do
-    stack $ unwords ["build", target, "--pedantic"]
-    stack $ unwords ["build", target, "--pedantic", "--haddock"]
+    stack $ unwords ["build", target, "--pedantic", "--no-run-benchmarks"]
+    stack $
+        unwords
+            ["build", target, "--pedantic", "--haddock", "--no-run-benchmarks"]
     stack $ unwords ["build", target, "--pedantic", "--bench"]
