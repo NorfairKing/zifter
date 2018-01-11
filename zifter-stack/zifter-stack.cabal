@@ -2,10 +2,10 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 50508cd84a22ba62e11ab22981d0ce13aca270f767660c7bf4c0992a879560a4
+-- hash: aea9178fd023b7723e4aac9629108895cee97bfa793860b9d38d8cb49b72d75b
 
 name:           zifter-stack
-version:        0.0.0.8
+version:        0.0.0.9
 synopsis:       zifter-stack
 description:    zifter-stack
 category:       Zift
