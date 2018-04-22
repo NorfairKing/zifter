@@ -77,7 +77,9 @@ runZiftScript scriptPath command = do
     let cmd = unwords [toFilePath scriptPath, command]
     let cp =
             (shell cmd)
-            {cwd = Just $ toFilePath $ parent scriptPath, std_out = CreatePipe}
+                { cwd = Just $ toFilePath $ parent scriptPath
+                , std_out = CreatePipe
+                }
     (_, mouth, merrh, ph) <- liftIO $ createProcess cp
     ec <- liftIO $ waitForProcess ph
     case mouth of

@@ -11,7 +11,7 @@ homepage: http://cs-syd.eu
 dependencies:
 - base >=4.9 && <=5
 - filepath >=1.4 && <1.5
-- hlint >=1.9.35 && <2.1
+- hlint >=1.9.35
 - path
 - path-io
 - safe >=0.3 && <0.4

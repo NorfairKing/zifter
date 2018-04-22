@@ -42,9 +42,13 @@ data LR
     deriving (Show, Eq, Generic)
 
 instance Validity ZiftContext where
-    isValid = isValid . rootdir
 #if MIN_VERSION_validity(0,4,0)
-    validate zc = rootdir zc <?!> "rootdir"
+    validate zc = annotate (rootdir zc) "rootdir"
+#else
+#if MIN_VERSION_validity(0,4,0)
+#else
+    isValid = isValid . rootdir
+#endif
 #endif
 data Zift a where
     ZiftPure :: a -> Zift a
@@ -107,9 +111,7 @@ data ZiftResult a
     | ZiftFailed String
     deriving (Show, Eq, Generic)
 
-instance Validity a => Validity (ZiftResult a) where
-    isValid (ZiftSuccess a) = isValid a
-    isValid _ = True
+instance Validity a => Validity (ZiftResult a)
 
 instance Monoid a => Monoid (ZiftResult a) where
     mempty = ZiftSuccess mempty

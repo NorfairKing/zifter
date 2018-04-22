@@ -74,13 +74,21 @@ import Path.IO
 import Safe
 import System.Console.ANSI
 import qualified System.Directory as D
-       (canonicalizePath, getPermissions, setOwnerExecutable,
-        setPermissions)
+    ( canonicalizePath
+    , getPermissions
+    , setOwnerExecutable
+    , setPermissions
+    )
 import System.Environment (getProgName)
 import System.Exit
 import qualified System.FilePath as FP (joinPath, splitPath)
 import System.IO
-       (BufferMode(NoBuffering), hFlush, hSetBuffering, stderr, stdout)
+    ( BufferMode(NoBuffering)
+    , hFlush
+    , hSetBuffering
+    , stderr
+    , stdout
+    )
 
 import Zifter.OptParse
 import Zifter.Recurse
@@ -140,12 +148,12 @@ runZiftAuto func sets = do
     pchan <- newTChanIO
     let ctx =
             ZiftContext
-            { rootdir = rd
-            , tmpdir = td
-            , settings = sets
-            , printChan = pchan
-            , recursionList = []
-            }
+                { rootdir = rd
+                , tmpdir = td
+                , settings = sets
+                , printChan = pchan
+                , recursionList = []
+                }
     result <- runZift ctx (func ctx)
     code <-
         case result of
@@ -265,7 +273,7 @@ outputFast color pchan fmvar =
                 Right output -> do
                     outputOneToken output
                     printer
-    in printer
+     in printer
   where
     outputOneToken :: ZiftToken -> IO ()
     outputOneToken (ZiftToken _ Nothing) = pure ()
@@ -296,7 +304,7 @@ outputLinear color pchan fmvar =
                         Just (st', buf) -> do
                             outputBuf buf
                             printer st'
-    in printer LinearUnknown
+     in printer LinearUnknown
   where
     outputBuf :: Buf -> IO ()
     outputBuf BufNotReady = pure ()
@@ -363,9 +371,9 @@ flushState = go
     go (LinearBranch ls rs) =
         let (ls', lbuf) = go ls
             (rs', rbuf) = go rs
-        in case lbuf of
-               BufNotReady -> (LinearBranch ls' rs, lbuf)
-               BufReady _ -> (LinearBranch ls' rs', lbuf <> rbuf)
+         in case lbuf of
+                BufNotReady -> (LinearBranch ls' rs, lbuf)
+                BufReady _ -> (LinearBranch ls' rs', lbuf <> rbuf)
 
 data Buf
     = BufNotReady

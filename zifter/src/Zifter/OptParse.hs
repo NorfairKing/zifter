@@ -26,9 +26,9 @@ combineToInstructions cmd Flags {..} Configuration = pure (d, sets)
   where
     sets =
         Settings
-        { setsOutputColor = flagsOutputColor
-        , setsOutputMode = fromMaybe OutputLinear flagsOutputMode
-        }
+            { setsOutputColor = flagsOutputColor
+            , setsOutputMode = fromMaybe OutputLinear flagsOutputMode
+            }
     d =
         case cmd of
             CommandRun -> DispatchRun
@@ -51,13 +51,13 @@ runArgumentsParser = execParserPure pfs argParser
   where
     pfs =
         ParserPrefs
-        { prefMultiSuffix = ""
-        , prefDisambiguate = True
-        , prefShowHelpOnError = True
-        , prefShowHelpOnEmpty = True
-        , prefBacktrack = True
-        , prefColumns = 80
-        }
+            { prefMultiSuffix = ""
+            , prefDisambiguate = True
+            , prefShowHelpOnError = True
+            , prefShowHelpOnEmpty = True
+            , prefBacktrack = True
+            , prefColumns = 80
+            }
 
 argParser :: ParserInfo Arguments
 argParser = info (helper <*> parseArgs) hlp
@@ -119,23 +119,23 @@ doubleSwitch name helpText mods =
     let enabledValue = True
         disabledValue = False
         defaultValue = True
-    in (last <$>
-        some
-            ((flag'
-                  enabledValue
-                  (hidden <> internal <> long name <> help helpText <> mods) <|>
+     in (last <$>
+         some
+             ((flag'
+                   enabledValue
+                   (hidden <> internal <> long name <> help helpText <> mods) <|>
+               flag'
+                   disabledValue
+                   (hidden <> internal <> long ("no-" ++ name) <> help helpText <>
+                    mods)) <|>
               flag'
                   disabledValue
-                  (hidden <> internal <> long ("no-" ++ name) <> help helpText <>
-                   mods)) <|>
-             flag'
-                 disabledValue
-                 (long ("[no-]" ++ name) <>
-                  help
-                      ("Enable/disable " ++
-                       helpText ++ " (default: " ++ show defaultValue ++ ")") <>
-                  mods))) <|>
-       pure defaultValue
+                  (long ("[no-]" ++ name) <>
+                   help
+                       ("Enable/disable " ++
+                        helpText ++ " (default: " ++ show defaultValue ++ ")") <>
+                   mods))) <|>
+        pure defaultValue
 
 outputModeFlag :: Parser (Maybe OutputMode)
 outputModeFlag =

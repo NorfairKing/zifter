@@ -5,8 +5,7 @@ module Zifter.Stack where
 import Control.Monad
 import Control.Monad.IO.Class
 import Data.Function (on)
-import Data.List
-       (groupBy, intersect, isInfixOf, isPrefixOf, isSuffixOf, sortOn)
+import Data.List (groupBy, intersect, isInfixOf, isPrefixOf, isSuffixOf, sortOn)
 import Data.Maybe (mapMaybe)
 import Path
 import Path.IO
@@ -82,7 +81,7 @@ stackGetPackageTargetTuplesAccordingToStackIDE = do
                 liftIO $
                 createProcess
                     ((shell cmd)
-                     {cwd = Just $ toFilePath rd, std_err = CreatePipe})
+                         {cwd = Just $ toFilePath rd, std_err = CreatePipe})
             ec <- liftIO $ waitForProcess ph
             case ec of
                 ExitFailure c ->
@@ -102,10 +101,10 @@ stackGetPackageTargetTuplesAccordingToStackIDE = do
     pure $
         flip map packages $ \p ->
             let relevantTargets = filter (isPrefixOf p) targets
-            in Pkg p $
-               map Lib (filter isLib relevantTargets) ++
-               map Test (filter isTest relevantTargets) ++
-               map Bench (filter isBench relevantTargets)
+             in Pkg p $
+                map Lib (filter isLib relevantTargets) ++
+                map Test (filter isTest relevantTargets) ++
+                map Bench (filter isBench relevantTargets)
 
 stackGetPackageTargetTuplesAccordingToCabalFiles :: Zift [Pkg]
 stackGetPackageTargetTuplesAccordingToCabalFiles = do
@@ -164,10 +163,10 @@ stack args = do
         liftIO $
         createProcess
             ((shell buildCmd)
-             { cwd = Just $ toFilePath rd
-             , std_out = CreatePipe
-             , std_err = CreatePipe
-             })
+                 { cwd = Just $ toFilePath rd
+                 , std_out = CreatePipe
+                 , std_err = CreatePipe
+                 })
     bec <- liftIO $ waitForProcess bph
     case mouth of
         Nothing -> pure ()

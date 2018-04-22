@@ -34,8 +34,8 @@ spec = do
             let func = do
                     pure ()
                     pure ()
-            in func `outputShouldBe`
-               [ZiftToken [L] Nothing, ZiftToken [R] Nothing]
+             in func `outputShouldBe`
+                [ZiftToken [L] Nothing, ZiftToken [R] Nothing]
         it "printZift outputs one message" $
             printZift "hello" `outputShouldBe`
             [ ZiftToken
@@ -46,18 +46,18 @@ spec = do
             let func = do
                     printZift "hello"
                     printZift "world"
-            in func `outputShouldBe`
-               [ ZiftToken
-                     [L]
-                     (Just
-                          ZiftOutput
-                          {outputColors = [], outputMessage = "hello"})
-               , ZiftToken
-                     [R]
-                     (Just
-                          ZiftOutput
-                          {outputColors = [], outputMessage = "world"})
-               ]
+             in func `outputShouldBe`
+                [ ZiftToken
+                      [L]
+                      (Just
+                           ZiftOutput
+                               {outputColors = [], outputMessage = "hello"})
+                , ZiftToken
+                      [R]
+                      (Just
+                           ZiftOutput
+                               {outputColors = [], outputMessage = "world"})
+                ]
     describe "addState" $ do
         it "stores the first output on the left for [L]" $
             forAllUnchecked $ \mzo ->
@@ -75,8 +75,8 @@ spec = do
             ln = l Nothing
             t bs es eb =
                 let (as, ab) = flushState bs
-                in do as `shouldBe` es
-                      ab `shouldBe` eb
+                 in do as `shouldBe` es
+                       ab `shouldBe` eb
         it "flushes a simple branch at the top level" $
             forAllUnchecked $ \(hello, world) ->
                 t
@@ -91,7 +91,7 @@ spec = do
             "does not flush the right side of a branch if the left side is unknown" $
             forAllUnchecked $ \msg ->
                 let s = b u (l (Just msg))
-                in t s s BufNotReady
+                 in t s s BufNotReady
         it "flushes a branch with two leaves" $
             forAllUnchecked $ \(hello, world) ->
                 t
@@ -139,15 +139,15 @@ spec = do
         it "flushes the entire tree for any done tree" $
             forAll doneTree $ \st ->
                 let (s', _) = flushState st
-                in s' `shouldBe` makeForceFlushed st
+                 in s' `shouldBe` makeForceFlushed st
         it "flushes the entire left tree for any tree whose left part is done" $
             forAllShrink doneTree (map makeForceFlushed . shrinkUnchecked) $ \dt ->
                 forAllUnchecked $ \ut ->
                     let s = b dt ut
                         (rs', b2) = flushState ut
-                    in t s
-                           (b (makeForceFlushed dt) rs')
-                           (flushStateAll dt <> b2)
+                     in t s
+                            (b (makeForceFlushed dt) rs')
+                            (flushStateAll dt <> b2)
         it "can only grow the depth of the state" $
             forAll
                 (genUnchecked `suchThat`
@@ -189,14 +189,14 @@ outputShouldSatisfy func predicate = do
     pchan <- newTChanIO
     let ctx =
             ZiftContext
-            { rootdir = rd
-            , tmpdir = td
-            , settings =
-                  Settings
-                  {setsOutputColor = False, setsOutputMode = OutputFast}
-            , printChan = pchan
-            , recursionList = []
-            }
+                { rootdir = rd
+                , tmpdir = td
+                , settings =
+                      Settings
+                          {setsOutputColor = False, setsOutputMode = OutputFast}
+                , printChan = pchan
+                , recursionList = []
+                }
     fmvar <- newEmptyTMVarIO
     ec <- ziftRunner ctx fmvar func
     ec `shouldBe` ZiftSuccess ()

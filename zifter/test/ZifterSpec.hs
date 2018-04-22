@@ -23,10 +23,10 @@ spec =
             td <- resolveDir rd ".zifter"
             let ctx =
                     ZiftContext
-                    { rootdir = rd
-                    , tmpdir = td
-                    , settings = sets
-                    , printChan = pchan
-                    , recursionList = []
-                    }
+                        { rootdir = rd
+                        , tmpdir = td
+                        , settings = sets
+                        , printChan = pchan
+                        , recursionList = []
+                        }
             runZift ctx (pure ()) `shouldReturn` ZiftSuccess ()

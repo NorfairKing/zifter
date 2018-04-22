@@ -39,14 +39,14 @@ runZiftInRepo func = do
     td <- resolveDir rd "/tmp/zifter-tmp"
     let ctx =
             ZiftContext
-            { rootdir = rd
-            , tmpdir = td
-            , settings =
-                  Settings
-                  {setsOutputColor = False, setsOutputMode = OutputFast}
-            , printChan = pchan
-            , recursionList = []
-            }
+                { rootdir = rd
+                , tmpdir = td
+                , settings =
+                      Settings
+                          {setsOutputColor = False, setsOutputMode = OutputFast}
+                , printChan = pchan
+                , recursionList = []
+                }
     zr <- runZift ctx func
     case zr of
         ZiftSuccess a -> pure a

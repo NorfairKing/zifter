@@ -1,0 +1,45 @@
+flags: {}
+extra-package-dbs: []
+packages:
+- zifter
+- zifter-cabal
+- zifter-git
+- zifter-google-java-format
+- zifter-hindent
+- zifter-hlint
+- zifter-stack
+
+extra-deps:
+- git: git@github.com:NorfairKing/validity.git
+  commit: ec7934da895234a7f080a6ea1bf9e70dd5e4eff3
+  subdirs:
+    - genvalidity
+    - genvalidity-aeson
+    - genvalidity-bytestring
+    - genvalidity-containers
+    - genvalidity-hspec
+    - genvalidity-hspec-aeson
+    - genvalidity-hspec-binary
+    - genvalidity-hspec-cereal
+    - genvalidity-hspec-hashable
+    - genvalidity-path
+    - genvalidity-property
+    - genvalidity-scientific
+    - genvalidity-text
+    - genvalidity-time
+    - genvalidity-unordered-containers
+    - genvalidity-uuid
+    - genvalidity-vector
+    - validity
+    - validity-aeson
+    - validity-bytestring
+    - validity-containers
+    - validity-path
+    - validity-scientific
+    - validity-text
+    - validity-time
+    - validity-unordered-containers
+    - validity-uuid
+    - validity-vector
+
+resolver: lts-11.5
