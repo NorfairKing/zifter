@@ -41,15 +41,6 @@ data LR
     | R
     deriving (Show, Eq, Generic)
 
-instance Validity ZiftContext where
-#if MIN_VERSION_validity(0,4,0)
-    validate zc = annotate (rootdir zc) "rootdir"
-#else
-#if MIN_VERSION_validity(0,4,0)
-#else
-    isValid = isValid . rootdir
-#endif
-#endif
 data Zift a where
     ZiftPure :: a -> Zift a
     ZiftCtx :: Zift ZiftContext
@@ -134,18 +125,3 @@ instance Monad ZiftResult where
 
 instance MonadFail ZiftResult where
     fail = ZiftFailed
--- -- | Internal: do not use yourself.
--- tryFlushZiftBuffer :: ZiftContext -> ZiftState -> IO ZiftState
--- tryFlushZiftBuffer ctx st =
---     if flushable $ recursionList ctx
---         then do
---             let zos = reverse $ bufferedOutput st
---                 st' = st {bufferedOutput = []}
---             atomically $ mapM_ (writeTChan $ printChan ctx) zos
---             pure st'
---         else pure st
---
--- -- The buffer is flushable when it's guaranteed to be the first in the in-order
--- -- of the evaluation tree.
--- flushable :: [LR] -> Bool
--- flushable = all (== L)
