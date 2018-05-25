@@ -1,5 +1,5 @@
 name: zifter-hlint
-version: '0.0.0.1'
+version: '0.1.0.0'
 synopsis: zifter-hlint
 description: zifter-hlint
 category: Zift
@@ -15,7 +15,7 @@ dependencies:
 - path
 - path-io
 - safe >=0.3 && <0.4
-- zifter >=0.0 && <0.1
+- zifter >=0.1
 library:
   source-dirs: src/
   ghc-options: -Wall
