@@ -1,5 +1,5 @@
 name: zifter
-version: '0.0.1.8'
+version: '0.1.0.0'
 synopsis: zifter
 description: zifter
 category: Zift
@@ -37,8 +37,8 @@ library:
   - process
   - safe
   - stm
-  - validity >=0.3
-  - validity-path >=0.1
+  - validity >=0.5
+  - validity-path >=0.2
 tests:
   zifter-test:
     main: Spec.hs
@@ -52,9 +52,9 @@ tests:
     - zifter
     - QuickCheck >=2.9 && <2.11
     - colour >=2.3 && <2.4
-    - genvalidity >=0.3
-    - genvalidity-hspec >=0.3
-    - genvalidity-path >=0.1
+    - genvalidity >=0.5
+    - genvalidity-hspec >=0.6
+    - genvalidity-path >=0.3
     - hspec
     - path
     - path-io

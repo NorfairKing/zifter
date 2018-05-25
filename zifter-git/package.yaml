@@ -1,5 +1,5 @@
 name: zifter-git
-version: '0.0.0.1'
+version: '0.1.0.0'
 synopsis: zifter-git
 description: zifter-git
 category: Zift
@@ -10,7 +10,7 @@ license: MIT
 homepage: http://cs-syd.eu
 dependencies:
 - base >=4.9 && <=5
-- zifter >=0.0 && <0.1
+- zifter >=0.1
 - process
 - path
 library:

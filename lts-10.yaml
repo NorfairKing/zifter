@@ -1,0 +1,11 @@
+flags: {}
+extra-package-dbs: []
+packages:
+- zifter
+- zifter-cabal
+- zifter-git
+- zifter-google-java-format
+- zifter-hindent
+- zifter-hlint
+- zifter-stack
+resolver: lts-10.0
