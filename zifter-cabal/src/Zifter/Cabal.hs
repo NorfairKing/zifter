@@ -34,7 +34,7 @@ cabalFormat = do
     rd <- getRootDir
     cabalFiles <-
         liftIO $
-        (filter (not . hidden) . filter ((".cabal" ==) . fileExtension) . snd) <$>
+        filter (not . hidden) . filter ((".cabal" ==) . fileExtension) . snd <$>
         listDirRecur rd
     forZ_ cabalFiles formatSingleCabalFile
 
