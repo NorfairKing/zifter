@@ -51,8 +51,8 @@ instance GenUnchecked ZiftOutput
 
 instance (Validity a) => Validity (RGB a) where
     validate RGB {..} =
-        (delve "channelRed" channelRed) <> (delve "channelGreen" channelGreen) <>
-        (delve "channelBlue" channelBlue)
+        delve "channelRed" channelRed <> delve "channelGreen" channelGreen <>
+        delve "channelBlue" channelBlue
 
 instance (Ord a, Floating a, GenUnchecked a) => GenUnchecked (Colour a) where
     genUnchecked = sRGB24 <$> genUnchecked <*> genUnchecked <*> genUnchecked

@@ -219,26 +219,22 @@ interpretZift = go
         efaa <- waitEither afaf aaf
         let complete fa a = pure $ fa <*> a
         case efaa of
-            Left far -> do
-                r <-
-                    case far of
-                        ZiftFailed s -> do
-                            cancel aaf
-                            pure $ ZiftFailed s
-                        _ -> do
-                            t2 <- wait aaf
-                            complete far t2
-                pure r
-            Right ar -> do
-                r <-
-                    case ar of
-                        ZiftFailed s -> do
-                            cancel afaf
-                            pure $ ZiftFailed s
-                        _ -> do
-                            t1 <- wait afaf
-                            complete t1 ar
-                pure r
+            Left far ->
+                case far of
+                    ZiftFailed s -> do
+                        cancel aaf
+                        pure $ ZiftFailed s
+                    _ -> do
+                        t2 <- wait aaf
+                        complete far t2
+            Right ar ->
+                case ar of
+                    ZiftFailed s -> do
+                        cancel afaf
+                        pure $ ZiftFailed s
+                    _ -> do
+                        t1 <- wait afaf
+                        complete t1 ar
     go rd (ZiftBind fa mb) = do
         ra <- go (rd {recursionList = L : recursionList rd}) fa
         case ra of
